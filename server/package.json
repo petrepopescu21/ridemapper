@@ -8,17 +8,16 @@
         "npm": "10.x"
     },
     "scripts": {
-        "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
-        "clean": "rimraf dist",
+        "dev": "concurrently \"tsc --watch\" \"nodemon dist/index.js\"",
         "type-check": "tsc --noEmit",
+        "clean": "rimraf dist",
         "db:generate": "prisma generate",
         "db:push": "prisma db push",
         "db:migrate": "prisma migrate dev",
         "db:reset": "prisma migrate reset --force",
-        "heroku-postbuild": "npm run db:generate && npm run db:push",
-        "release": "npm run db:push"
+        "heroku-postbuild": "npm run build && npx prisma generate && npx prisma migrate deploy"
     },
     "dependencies": {
         "@prisma/client": "^5.7.1",

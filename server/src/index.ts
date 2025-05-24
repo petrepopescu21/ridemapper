@@ -68,9 +68,31 @@ const routeService = new RouteService()
 // Health check endpoint
 app.get('/health', async (req: Request, res: Response) => {
   const dbHealth = await databaseService.healthCheck()
+
+  // Check if database tables exist
+  let tablesExist = false
+  let routeCount = 0
+  let sessionCount = 0
+
+  try {
+    if (dbHealth) {
+      // Test if our tables exist by counting records
+      routeCount = await databaseService.getClient().route.count()
+      sessionCount = await databaseService.getClient().session.count()
+      tablesExist = true
+    }
+  } catch (error) {
+    console.error('Health check - table check failed:', error)
+    tablesExist = false
+  }
+
   res.json({
     status: dbHealth ? 'healthy' : 'unhealthy',
     database: dbHealth ? 'connected' : 'disconnected',
+    tablesExist,
+    routeCount,
+    sessionCount,
+    databaseUrl: !!process.env.DATABASE_URL,
     timestamp: new Date().toISOString(),
     activeSessions: sessionManager.getAllActiveSessions().length,
     environment: process.env.NODE_ENV || 'development',
@@ -327,6 +349,22 @@ io.on('connection', (socket) => {
   // Route management
   socket.on('route:create', async (data, callback) => {
     try {
+      console.log('Route creation request:', {
+        name: data.name,
+        pointsCount: data.points?.length,
+        createdBy: data.createdBy,
+        hasDescription: !!data.description,
+        isTemplate: data.isTemplate,
+      })
+
+      // Validate required fields
+      if (!data.name || !data.points || !data.createdBy) {
+        const error = 'Missing required fields: name, points, or createdBy'
+        console.error('Route creation validation failed:', error)
+        callback({ success: false, error })
+        return
+      }
+
       const route = await routeService.createRoute(
         data.name,
         data.points,
@@ -340,9 +378,16 @@ io.on('connection', (socket) => {
       // Broadcast route creation to interested clients
       io.emit('route:created', { route })
 
-      console.log(`Route "${data.name}" created by ${data.createdBy}`)
+      console.log(`✅ Route "${data.name}" created successfully by ${data.createdBy}`)
     } catch (error) {
-      console.error('Error creating route:', error)
+      console.error('❌ Error creating route:', error)
+
+      // Log more details about the error
+      if (error instanceof Error) {
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
+      }
+
       callback({ success: false, error: 'Failed to create route' })
     }
   })
