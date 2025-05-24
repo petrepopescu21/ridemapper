@@ -19,13 +19,24 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/maps\.googleapis\.com\//,
+            urlPattern: /^https:\/\/maps\.googleapis\.com\/maps\/api\/js/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-maps-cache',
+              cacheName: 'google-maps-api-cache',
               expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/.*\.googleapis\.com\/.*\.(png|jpg|jpeg|svg|woff|woff2)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-static-assets',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
             },
           },
