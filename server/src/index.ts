@@ -3,8 +3,12 @@ import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import cors from 'cors'
 import path from 'path'
+import { config } from 'dotenv'
 import { SessionManager } from './services/SessionManager'
 import { ServerToClientEvents, ClientToServerEvents, SerializedSession } from './types'
+
+// Load environment variables from .env file in project root
+config({ path: path.join(__dirname, '../../.env') })
 
 const app = express()
 const server = createServer(app)
@@ -160,6 +164,65 @@ io.on('connection', (socket) => {
     }
   })
 
+  // Session recovery handlers
+  socket.on('session:validate-manager', (data, callback) => {
+    try {
+      const session = sessionManager.getSession(data.sessionId)
+      
+      if (session && session.isActive && session.managerId === data.managerId) {
+        // Rejoin the socket to the session room
+        socket.join(session.id)
+        
+        // Serialize the session for transmission
+        const serializedSession = serializeSession(session)
+        
+        callback({ success: true, session: serializedSession })
+        console.log(`Manager reconnected to session ${session.pin}`)
+      } else {
+        callback({ success: false, error: 'Session not found or access denied' })
+      }
+    } catch (error) {
+      console.error('Error validating manager session:', error)
+      callback({ success: false, error: 'Failed to validate session' })
+    }
+  })
+
+  socket.on('session:rejoin', (data, callback) => {
+    try {
+      const session = sessionManager.getParticipantSession(data.participantId)
+      
+      if (session && session.isActive && session.id === data.sessionId) {
+        // Mark participant as online
+        const participant = session.participants.get(data.participantId)
+        if (participant) {
+          participant.isOnline = true
+          
+          // Rejoin the socket to the session room
+          socket.join(session.id)
+          
+          // Serialize the session for transmission
+          const serializedSession = serializeSession(session)
+          
+          // Notify other participants that this participant is back online
+          socket.to(session.id).emit('session:joined', {
+            sessionId: session.id,
+            participant: participant
+          })
+          
+          callback({ success: true, session: serializedSession })
+          console.log(`Participant ${participant.name} reconnected to session ${session.pin}`)
+        } else {
+          callback({ success: false, error: 'Participant not found in session' })
+        }
+      } else {
+        callback({ success: false, error: 'Session not found or access denied' })
+      }
+    } catch (error) {
+      console.error('Error rejoining session:', error)
+      callback({ success: false, error: 'Failed to rejoin session' })
+    }
+  })
+
   // Location updates
   socket.on('location:update', (data) => {
     try {
@@ -240,9 +303,10 @@ setInterval(() => {
   sessionManager.cleanup()
 }, 60 * 60 * 1000)
 
-const PORT = process.env.PORT || 3002
+const PORT = Number(process.env.PORT) || 3000
+const HOST = process.env.HOST || '127.0.0.1'
 
-server.listen(PORT, () => {
-  console.log(`RideMapper server running on port ${PORT}`)
+server.listen(PORT, HOST, () => {
+  console.log(`RideMapper server running on http://${HOST}:${PORT}`)
   console.log(`WebSocket server ready for connections`)
 }) 

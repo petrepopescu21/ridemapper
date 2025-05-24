@@ -40,7 +40,7 @@ const isLocationLoading = ref(false)
 const sessionPin = computed(() => sessionStore.currentSession?.pin || '')
 const participantName = computed(() => {
   if (!sessionStore.currentParticipantId || !sessionStore.currentSession) return ''
-  const participant = sessionStore.currentSession.participants.get(sessionStore.currentParticipantId)
+  const participant = sessionStore.currentSession.participants[sessionStore.currentParticipantId]
   return participant?.name || ''
 })
 
@@ -240,8 +240,8 @@ function centerToRouteOrManagerLocation() {
     })
   } else {
     // Check if manager has a location
-    const managerParticipant = Array.from(sessionStore.currentSession?.participants.values() || [])
-      .find(p => p.name.includes('Manager') || p.id === sessionStore.currentSession?.createdBy)
+    const managerParticipant = Object.values(sessionStore.currentSession?.participants || {})
+      .find(p => p.name.includes('Manager') || p.id === sessionStore.currentSession?.managerId)
     
     if (managerParticipant?.location) {
       const managerLocation = {
@@ -412,7 +412,7 @@ function clearRoute() {
 function updateParticipantMarkers() {
   if (!map.value || !sessionStore.currentSession) return
 
-  sessionStore.currentSession.participants.forEach((participant, id) => {
+  Object.entries(sessionStore.currentSession.participants).forEach(([id, participant]) => {
     if (!participant.location || !participant.isOnline) {
       // Remove marker if participant is offline
       const marker = participantMarkers.value.get(id)
@@ -477,7 +477,6 @@ function sendLocationUpdate() {
       coords.value.latitude !== 0 && 
       coords.value.longitude !== 0) {
     sessionStore.updateParticipantLocation(
-      sessionStore.currentParticipantId,
       coords.value.latitude,
       coords.value.longitude
     )
@@ -528,6 +527,13 @@ onMounted(async () => {
   try {
     await loadGoogleMapsScript()
     initMap()
+
+    // For participants: display existing route if available
+    if (!sessionStore.isManager && sessionStore.currentSession?.route?.length) {
+      setTimeout(() => {
+        displayRoute()
+      }, 1000) // Give time for map to initialize
+    }
 
     // Start location updates
     locationInterval.value = window.setInterval(() => {
@@ -580,12 +586,24 @@ watch(coords, (newCoords) => {
 // Watch for route changes (for participants to auto-center when manager updates route)
 watch(() => sessionStore.currentSession?.route, (newRoute) => {
   if (!sessionStore.isManager && newRoute && newRoute.length > 0) {
-    // Participant: re-center to updated route
+    // Participant: display the updated route and center to it
     setTimeout(() => {
+      displayRoute()
       centerToRouteOrManagerLocation()
     }, 1000) // Give time for route to be rendered
   }
 }, { deep: true })
+
+// Watch for session availability (for participants to display route when session loads)
+watch(() => sessionStore.currentSession, (newSession) => {
+  if (!sessionStore.isManager && newSession && newSession.route && newSession.route.length > 0 && map.value) {
+    console.log('Session loaded with existing route, displaying it')
+    setTimeout(() => {
+      displayRoute()
+      centerToRouteOrManagerLocation()
+    }, 500)
+  }
+}, { immediate: true })
 
 // Call the new Routes API
 async function callRoutesAPI(waypoints: google.maps.LatLng[]) {
@@ -1008,7 +1026,7 @@ function displayFallbackRoute() {
             density="compact"
             class="mb-4"
           >
-            To: {{ sessionStore.currentSession?.participants.get(selectedParticipant)?.name }}
+            To: {{ sessionStore.currentSession?.participants[selectedParticipant]?.name }}
           </v-alert>
 
           <v-textarea

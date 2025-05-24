@@ -50,7 +50,7 @@ A real-time location tracking and route management application built with Vue.js
    npm run dev:all
    ```
 
-   This starts both the client (http://localhost:5173) and server (http://localhost:3002)
+   This starts both the client (http://localhost:5173) and server (http://localhost:3000)
 
 ## Heroku Deployment 🚀
 

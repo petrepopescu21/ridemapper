@@ -35,6 +35,7 @@ fi
 # Set environment variables
 echo "🔧 Setting environment variables..."
 heroku config:set NODE_ENV=production --app=$HEROKU_APP
+heroku config:set HOST=0.0.0.0 --app=$HEROKU_APP
 
 # Check if Google Maps API key is set
 if ! heroku config:get VITE_GOOGLE_MAPS_API_KEY --app=$HEROKU_APP &> /dev/null || [ -z "$(heroku config:get VITE_GOOGLE_MAPS_API_KEY --app=$HEROKU_APP)" ]; then

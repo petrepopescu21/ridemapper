@@ -1,13 +1,60 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useSessionStore } from '@/stores/session'
+
+const router = useRouter()
+const sessionStore = useSessionStore()
+const isRecovering = ref(false)
+
+onMounted(async () => {
+  // Try to recover session on app load
+  isRecovering.value = true
+  
+  try {
+    const result = await sessionStore.recoverSession()
+    
+    if (result.success) {
+      console.log('Session recovered successfully')
+      // Redirect to map if session was recovered
+      if (sessionStore.currentSession) {
+        await router.push('/map')
+      }
+    } else {
+      console.log('No session to recover:', result.error)
+    }
+  } catch (error) {
+    console.error('Session recovery failed:', error)
+  } finally {
+    isRecovering.value = false
+  }
+})
 </script>
 
 <template>
-  <v-app>
-    <v-main>
-      <RouterView />
-    </v-main>
-  </v-app>
+  <div id="app">
+    <!-- Loading overlay during session recovery -->
+    <v-overlay
+      v-model="isRecovering"
+      persistent
+      class="d-flex align-center justify-center"
+    >
+      <v-card class="pa-8 text-center" max-width="400">
+        <v-progress-circular
+          indeterminate
+          size="64"
+          color="primary"
+          class="mb-4"
+        />
+        <h3 class="text-h6 mb-2">Recovering Session...</h3>
+        <p class="text-body-2 text-medium-emphasis">
+          Reconnecting to your active session
+        </p>
+      </v-card>
+    </v-overlay>
+
+    <RouterView />
+  </div>
 </template>
 
 <style>

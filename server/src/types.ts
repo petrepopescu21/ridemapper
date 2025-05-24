@@ -78,6 +78,8 @@ export interface ClientToServerEvents {
   'session:join': (data: { pin: string; participantName: string }, callback: (response: { success: boolean; session?: SerializedSession; participantId?: string; error?: string }) => void) => void
   'session:leave': (data: { sessionId: string; participantId: string }) => void
   'session:end': (data: { sessionId: string; managerId: string }) => void
+  'session:rejoin': (data: { sessionId: string; participantId: string }, callback: (response: { success: boolean; session?: SerializedSession; error?: string }) => void) => void
+  'session:validate-manager': (data: { sessionId: string; managerId: string }, callback: (response: { success: boolean; session?: SerializedSession; error?: string }) => void) => void
   
   // Location updates
   'location:update': (data: { sessionId: string; participantId: string; location: Location }) => void

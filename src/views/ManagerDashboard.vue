@@ -9,6 +9,8 @@ const sessionStore = useSessionStore()
 const authStore = useAuthStore()
 
 const showCreateModal = ref(false)
+const isCreating = ref(false)
+const createError = ref('')
 
 // Set manager flag when accessing dashboard
 sessionStore.isManager = true
@@ -17,9 +19,28 @@ const hasActiveSession = computed(() => {
   return sessionStore.currentSession && sessionStore.currentSession.isActive
 })
 
-function createNewSession() {
-  const session = sessionStore.createSession(authStore.managerId!)
-  showCreateModal.value = true
+const isSessionRecovered = computed(() => {
+  // Check if we have a session that was loaded from storage
+  return hasActiveSession.value && !isCreating.value
+})
+
+async function createNewSession() {
+  isCreating.value = true
+  createError.value = ''
+  
+  try {
+    const result = await sessionStore.createSession(authStore.managerId!)
+    if (result.success) {
+      showCreateModal.value = true
+    } else {
+      createError.value = result.error || 'Failed to create session'
+    }
+  } catch (error) {
+    console.error('Error creating session:', error)
+    createError.value = 'Failed to create session. Please try again.'
+  } finally {
+    isCreating.value = false
+  }
 }
 
 function goToMap() {
@@ -67,6 +88,20 @@ function copyPin() {
     <!-- Main Content -->
     <v-main>
       <v-container fluid class="pa-6">
+        <!-- Session Recovery Banner -->
+        <v-alert
+          v-if="isSessionRecovered"
+          type="success"
+          variant="tonal"
+          density="compact"
+          class="mb-6"
+          prepend-icon="mdi-backup-restore"
+          closable
+        >
+          <v-alert-title>Session Recovered</v-alert-title>
+          <div>Your previous session has been automatically restored. You can continue managing your active session.</div>
+        </v-alert>
+
         <!-- Active Session -->
         <v-row v-if="hasActiveSession">
           <v-col cols="12">
@@ -202,14 +237,34 @@ function copyPin() {
                 Create a new session to start managing routes and tracking participants
               </p>
               
+              <!-- Error Message -->
+              <v-alert
+                v-if="createError"
+                type="error"
+                variant="tonal"
+                class="mb-4"
+                :text="createError"
+              />
+              
+              <!-- Connection Status -->
+              <v-alert
+                v-if="!sessionStore.isConnected && sessionStore.connectionError"
+                type="warning"
+                variant="tonal"
+                class="mb-4"
+                :text="sessionStore.connectionError"
+              />
+              
               <v-btn
                 @click="createNewSession"
                 color="primary"
                 size="x-large"
                 prepend-icon="mdi-plus"
+                :loading="isCreating"
+                :disabled="isCreating"
                 class="text-none font-weight-bold px-8"
               >
-                Create New Session
+                {{ isCreating ? 'Creating Session...' : 'Create New Session' }}
               </v-btn>
             </v-card>
           </v-col>

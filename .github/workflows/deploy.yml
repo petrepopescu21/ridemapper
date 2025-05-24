@@ -113,6 +113,7 @@ jobs:
           
           # Set config variables
           heroku config:set NODE_ENV=production --app=${{ secrets.HEROKU_APP_NAME }}
+          heroku config:set HOST=0.0.0.0 --app=${{ secrets.HEROKU_APP_NAME }}
           heroku config:set VITE_GOOGLE_MAPS_API_KEY="${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" --app=${{ secrets.HEROKU_APP_NAME }}
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}

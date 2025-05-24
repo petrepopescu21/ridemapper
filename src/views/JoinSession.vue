@@ -27,23 +27,16 @@ async function handleJoin() {
       return
     }
 
-    // In a real app, this would connect to a backend to validate the PIN
-    // For now, we'll simulate this with a temporary session
+    // Connect to server and join session
+    const result = await sessionStore.joinSession(pin.value, name.value.trim())
     
-    // Demo mode: Create a session if PIN is '123456'
-    if (pin.value === '123456' && !sessionStore.currentSession) {
-      sessionStore.createSession('demo-manager')
-      sessionStore.currentSession!.pin = '123456'
-    }
-    
-    const success = sessionStore.joinSession(pin.value, name.value.trim())
-    
-    if (success) {
+    if (result.success) {
       router.push('/map')
     } else {
-      error.value = 'Invalid PIN. Please check and try again. (Try demo PIN: 123456)'
+      error.value = result.error || 'Failed to join session. Please check your PIN and try again.'
     }
   } catch (e) {
+    console.error('Join session error:', e)
     error.value = 'An error occurred. Please try again.'
   } finally {
     isLoading.value = false
