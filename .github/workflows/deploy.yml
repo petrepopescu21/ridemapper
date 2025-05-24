@@ -7,7 +7,7 @@ on:
 
 env:
   NODE_VERSION: '18'
-  HEROKU_APP_NAME: ${{ env.HEROKU_APP_NAME }}
+  HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
 
 jobs:
   test:
