@@ -147,23 +147,65 @@ jobs:
           echo "Waiting for deployment to complete..."
           sleep 30
 
-          APP_URL="https://${{ env.HEROKU_APP_NAME }}.herokuapp.com"
+          # Install jq for JSON parsing
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Get the actual app URL from Heroku
+          echo "🔍 Getting app info from Heroku..."
+          heroku apps:info --app=${{ env.HEROKU_APP_NAME }} || echo "Failed to get app info"
+
+          APP_URL=$(heroku apps:info --app=${{ env.HEROKU_APP_NAME }} --json 2>/dev/null | jq -r '.app.web_url' 2>/dev/null)
+
+          # Fallback to constructing URL if jq fails or returns null
+          if [ "$APP_URL" == "null" ] || [ -z "$APP_URL" ] || [ "$APP_URL" == "" ]; then
+            APP_URL="https://${{ env.HEROKU_APP_NAME }}.herokuapp.com"
+            echo "⚠️  Using fallback URL construction"
+          else
+            echo "✅ Got URL from Heroku API"
+          fi
+
+          # Remove trailing slash if present
+          APP_URL=${APP_URL%/}
+
+          echo "🌐 Testing app at: ${APP_URL}"
+          echo "📋 App name: ${{ env.HEROKU_APP_NAME }}"
+          echo "🔍 Health endpoint: ${APP_URL}/health"
 
           # Try health check up to 5 times
           for i in {1..5}; do
-            if curl -f "${APP_URL}/health" > /dev/null 2>&1; then
+            echo "⏳ Health check attempt $i..."
+            
+            if curl -f -s "${APP_URL}/health" > /tmp/health_response.json; then
               echo "✅ Health check passed!"
+              echo "📊 Health response:"
+              cat /tmp/health_response.json | jq '.' || cat /tmp/health_response.json
+              echo ""
               echo "🌐 App is live at: ${APP_URL}"
               exit 0
             else
-              echo "⏳ Health check attempt $i failed, retrying in 10 seconds..."
-              sleep 10
+              echo "❌ Health check attempt $i failed"
+              echo "🔍 Response details:"
+              curl -s -w "HTTP Status: %{http_code}\nTotal time: %{time_total}s\n" "${APP_URL}/health" || echo "Request failed completely"
+              echo ""
+              
+              if [ $i -lt 5 ]; then
+                echo "⏳ Retrying in 15 seconds..."
+                sleep 15
+              fi
             fi
           done
 
           echo "❌ Health check failed after 5 attempts"
-          echo "Check the logs: heroku logs --tail --app=${{ env.HEROKU_APP_NAME }}"
+          echo "🔧 Check the logs with: heroku logs --tail --app=${{ env.HEROKU_APP_NAME }}"
+          echo "🌐 Try accessing manually: ${APP_URL}"
+
+          # Show recent logs for debugging
+          echo "📝 Recent Heroku logs:"
+          heroku logs --tail --num=50 --app=${{ env.HEROKU_APP_NAME }} || true
+
           exit 1
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
 
       - name: Deployment summary
         if: success()

@@ -99,6 +99,62 @@ app.get('/health', async (req: Request, res: Response) => {
   })
 })
 
+// API endpoint for background sync location updates
+app.post('/api/location', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, participantId, location, timestamp } = req.body
+
+    // Validate required fields
+    if (!sessionId || !participantId || !location || !location.lat || !location.lng) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: sessionId, participantId, location.lat, location.lng',
+      })
+    }
+
+    console.log('📍 API location update:', {
+      sessionId,
+      participantId,
+      location,
+      timestamp,
+    })
+
+    // Update location via SessionManager
+    const result = await sessionManager.updateParticipantLocation(
+      participantId,
+      location.lat,
+      location.lng
+    )
+
+    if (result.success && result.sessionId) {
+      // Broadcast location update to all participants in the session via WebSocket
+      io.to(result.sessionId).emit('location:updated', {
+        sessionId: result.sessionId,
+        participantId,
+        location,
+      })
+
+      res.json({
+        success: true,
+        message: 'Location updated successfully',
+      })
+
+      console.log('✅ API location update broadcasted to session', result.sessionId)
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Participant or session not found',
+      })
+    }
+  } catch (error) {
+    console.error('❌ API location update error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+})
+
 // Initialize database and services
 async function initializeServer() {
   try {
