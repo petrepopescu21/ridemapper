@@ -1,0 +1,169 @@
+name: Deploy to Heroku
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual triggers
+
+env:
+  NODE_VERSION: '18'
+  HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install client dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Type check client
+        run: npm run type-check
+
+      - name: Type check server
+        run: cd server && npm run type-check
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd server && npm ci
+
+      - name: Build application
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: |
+            server/dist/
+            server/client-dist/
+          retention-days: 1
+
+  deploy:
+    name: Deploy to Heroku
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    environment: 
+      name: production
+      url: https://${{ env.HEROKU_APP_NAME }}.herokuapp.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full git history for Heroku
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
+          path: server/
+
+      - name: Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v3.14.0
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+          usedocker: false
+          buildpack: heroku/nodejs
+          branch: main
+
+      - name: Configure Heroku environment
+        run: |
+          # Install Heroku CLI
+          curl https://cli-assets.heroku.com/install.sh | sh
+          
+          # Set config variables
+          heroku config:set NODE_ENV=production --app=${{ secrets.HEROKU_APP_NAME }}
+          heroku config:set VITE_GOOGLE_MAPS_API_KEY="${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" --app=${{ secrets.HEROKU_APP_NAME }}
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+      - name: Health check
+        run: |
+          echo "Waiting for deployment to complete..."
+          sleep 30
+          
+          APP_URL="https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+          
+          # Try health check up to 5 times
+          for i in {1..5}; do
+            if curl -f "${APP_URL}/health" > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+              echo "🌐 App is live at: ${APP_URL}"
+              exit 0
+            else
+              echo "⏳ Health check attempt $i failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+          
+          echo "❌ Health check failed after 5 attempts"
+          echo "Check the logs: heroku logs --tail --app=${{ secrets.HEROKU_APP_NAME }}"
+          exit 1
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          echo "📱 App: ${{ secrets.HEROKU_APP_NAME }}"
+          echo "🌐 URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+          echo "🏥 Health: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+          echo "📊 Logs: heroku logs --tail --app=${{ secrets.HEROKU_APP_NAME }}"
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: Deployment Success Notification
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "✅ RideMapper successfully deployed to Heroku!"
+          echo "🌐 Live at: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+
+      - name: Deployment Failure Notification
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ RideMapper deployment to Heroku failed!"
+          echo "📋 Check the workflow logs for details"
+          echo "🔧 Manual deployment may be required" 

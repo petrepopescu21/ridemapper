@@ -1,5 +1,9 @@
 # RideMapper 🗺️
 
+[![Deploy to Heroku](https://github.com/your-username/ridemapper/actions/workflows/deploy.yml/badge.svg)](https://github.com/your-username/ridemapper/actions/workflows/deploy.yml)
+[![PR Checks](https://github.com/your-username/ridemapper/actions/workflows/pr-check.yml/badge.svg)](https://github.com/your-username/ridemapper/actions/workflows/pr-check.yml)
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/your-username/ridemapper)
+
 A real-time location tracking and route management application built with Vue.js, Socket.io, and Google Maps.
 
 ## Features
@@ -68,7 +72,30 @@ npm run docker:up
    - Routes API
    - Geocoding API (optional)
 
-### Deploy to Heroku
+### Automated Deployment (Recommended)
+
+**GitHub Actions** automatically deploys your app when you merge to the `main` branch.
+
+#### Setup GitHub Secrets
+
+Go to your repository → Settings → Secrets and variables → Actions
+
+Add these secrets:
+
+| Secret | Description | How to Get |
+|--------|-------------|------------|
+| `HEROKU_API_KEY` | Heroku API token | `heroku auth:token` |
+| `HEROKU_APP_NAME` | Your Heroku app name | Your app name |
+| `HEROKU_EMAIL` | Heroku account email | Your login email |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps API key | Google Cloud Console |
+
+#### How It Works
+
+1. **Pull Request** → Runs tests, security audit, type checking
+2. **Merge to Main** → Automatic deployment to Heroku
+3. **Manual Trigger** → Actions tab → "Deploy to Heroku"
+
+### Manual Deployment
 
 1. **Create a Heroku app**
    ```bash
