@@ -84,6 +84,7 @@ export class SessionManager {
       id: managerId,
       name: `${managerName} (Manager)`,
       isOnline: true,
+      isManager: true,
       joinedAt: Date.now(),
       lastSeen: Date.now(),
     }
@@ -134,6 +135,7 @@ export class SessionManager {
         id: participantId,
         name: participantName,
         isOnline: true,
+        isManager: false, // Regular participants are not managers
         joinedAt: Date.now(),
         lastSeen: Date.now(),
       }
@@ -146,6 +148,43 @@ export class SessionManager {
     } catch (error) {
       console.error('Error joining session:', error)
       return { success: false, error: 'Failed to join session' }
+    }
+  }
+
+  async joinAsManager(
+    pin: string,
+    managerName: string,
+    managerId: string
+  ): Promise<{ success: boolean; session?: Session; participantId?: string; error?: string }> {
+    const sessionId = this.sessionsByPin.get(pin)
+    if (!sessionId) {
+      return { success: false, error: 'Invalid PIN' }
+    }
+
+    let session = this.activeSessions.get(sessionId)
+    if (!session || !session.isActive) {
+      return { success: false, error: 'Session not found or inactive' }
+    }
+
+    try {
+      // Create manager participant in memory only
+      const participant: Participant = {
+        id: managerId,
+        name: managerName,
+        isOnline: true,
+        isManager: true, // This is a manager
+        joinedAt: Date.now(),
+        lastSeen: Date.now(),
+      }
+
+      session.participants.set(managerId, participant)
+      this.participantSessions.set(managerId, sessionId)
+
+      console.log(`Manager ${managerName} joined session ${sessionId} (memory only)`)
+      return { success: true, session, participantId: managerId }
+    } catch (error) {
+      console.error('Error joining session as manager:', error)
+      return { success: false, error: 'Failed to join session as manager' }
     }
   }
 

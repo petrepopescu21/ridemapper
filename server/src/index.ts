@@ -96,13 +96,28 @@ io.on('connection', (socket) => {
   // Session management
   socket.on('session:create', async (data, callback) => {
     try {
+      console.log('Creating session with data:', data)
       const session = await sessionManager.createSession(data.managerName, data.routeId)
+      console.log('Session created:', {
+        id: session.id,
+        pin: session.pin,
+        routeId: session.routeId,
+        hasRoute: !!session.route,
+      })
+      if (session.route) {
+        console.log('Route details:', {
+          id: session.route.id,
+          name: session.route.name,
+          pointsCount: session.route.points.length,
+        })
+      }
 
       // Join the socket to the session room
       socket.join(session.id)
 
       // Serialize the session for transmission
       const serializedSession = serializeSession(session)
+      console.log('Serialized session route:', !!serializedSession.route)
 
       callback({ success: true, session: serializedSession })
       console.log(`Manager ${data.managerName} created session ${session.pin}`)
@@ -145,6 +160,39 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Error joining session:', error)
       callback({ success: false, error: 'Failed to join session' })
+    }
+  })
+
+  socket.on('session:join-as-manager', async (data, callback) => {
+    try {
+      const result = await sessionManager.joinAsManager(data.pin, data.managerName, data.managerId)
+
+      if (result.success && result.session && result.participantId) {
+        // Join the socket to the session room
+        socket.join(result.session.id)
+
+        // Serialize the session for transmission
+        const serializedSession = serializeSession(result.session)
+
+        // Notify other participants
+        socket.to(result.session.id).emit('session:joined', {
+          sessionId: result.session.id,
+          participant: result.session.participants.get(result.participantId)!,
+        })
+
+        callback({
+          success: true,
+          session: serializedSession,
+          participantId: result.participantId,
+        })
+
+        console.log(`Manager ${data.managerName} joined session ${data.pin}`)
+      } else {
+        callback({ success: false, error: result.error })
+      }
+    } catch (error) {
+      console.error('Error joining session as manager:', error)
+      callback({ success: false, error: 'Failed to join session as manager' })
     }
   })
 

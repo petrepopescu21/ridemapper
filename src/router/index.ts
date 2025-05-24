@@ -27,14 +27,14 @@ const router = createRouter({
       beforeEnter: (to, from, next) => {
         const authStore = useAuthStore()
         const sessionStore = useSessionStore()
-        
+
         // Allow access if user is either an authenticated manager or a participant
         if (authStore.isAuthenticated || sessionStore.currentParticipantId) {
           next()
         } else {
           next('/')
         }
-      }
+      },
     },
     {
       path: '/manager-dashboard',
@@ -42,13 +42,27 @@ const router = createRouter({
       component: () => import('../views/ManagerDashboard.vue'),
       beforeEnter: (to, from, next) => {
         const authStore = useAuthStore()
-        
+
         if (authStore.isAuthenticated) {
           next()
         } else {
           next('/manager-login')
         }
-      }
+      },
+    },
+    {
+      path: '/maps',
+      name: 'maps',
+      component: () => import('../views/MapsManagement.vue'),
+      beforeEnter: (to, from, next) => {
+        const authStore = useAuthStore()
+
+        if (authStore.isAuthenticated) {
+          next()
+        } else {
+          next('/manager-login')
+        }
+      },
     },
   ],
 })

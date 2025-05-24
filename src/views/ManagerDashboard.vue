@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { useAuthStore } from '@/stores/auth'
+import { routeService, type Route } from '@/services/routeService'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
@@ -12,6 +13,10 @@ const showCreateModal = ref(false)
 const isCreating = ref(false)
 const createError = ref('')
 const joinedExisting = ref(false)
+const showMapSelection = ref(false)
+const showMobileMenu = ref(false)
+const availableMaps = ref<Route[]>([])
+const selectedMapId = ref<string | null>(null)
 
 // Set manager flag when accessing dashboard
 sessionStore.isManager = true
@@ -26,12 +31,51 @@ const isSessionRecovered = computed(() => {
 })
 
 async function createNewSession() {
+  // First, load available maps
+  await loadAvailableMaps()
+  
+  if (availableMaps.value.length === 0) {
+    createError.value = 'No maps available. Please create a map first.'
+    return
+  }
+  
+  // Show map selection dialog
+  showMapSelection.value = true
+}
+
+async function loadAvailableMaps() {
+  try {
+    const result = await routeService.listRoutes(
+      undefined, // Remove manager filtering - show all maps
+      true // Only load template routes
+    )
+    
+    if (result.success && result.routes) {
+      availableMaps.value = result.routes
+      console.log(`Loaded ${result.routes.length} available maps (global)`)
+    } else {
+      throw new Error(result.error || 'Failed to load routes')
+    }
+  } catch (error) {
+    console.error('Error loading maps:', error)
+    createError.value = error instanceof Error ? error.message : 'Failed to load maps. Please try again.'
+    availableMaps.value = []
+  }
+}
+
+async function confirmCreateSession() {
+  if (!selectedMapId.value) {
+    return
+  }
+  
   isCreating.value = true
   createError.value = ''
   joinedExisting.value = false
+  showMapSelection.value = false
   
   try {
-    const result = await sessionStore.createSession(authStore.managerId!)
+    // Pass selectedMapId to session creation
+    const result = await sessionStore.createSession(authStore.managerId!, selectedMapId.value)
     if (result.success) {
       joinedExisting.value = result.joinedExisting || false
       showCreateModal.value = true
@@ -48,6 +92,10 @@ async function createNewSession() {
 
 function goToMap() {
   router.push('/map')
+}
+
+function goToMaps() {
+  router.push('/maps')
 }
 
 function logout() {
@@ -76,17 +124,68 @@ function copyPin() {
       </v-app-bar-title>
 
       <template #append>
+        <!-- Desktop: Navigation Buttons -->
+        <div class="d-none d-md-flex align-center">
+          <v-btn
+            @click="goToMaps"
+            variant="outlined"
+            color="white"
+            prepend-icon="mdi-map-outline"
+            class="text-none mr-2"
+          >
+            Manage Maps
+          </v-btn>
+          
+          <v-btn
+            @click="logout"
+            variant="outlined"
+            color="white"
+            prepend-icon="mdi-logout"
+            class="text-none"
+          >
+            Logout
+          </v-btn>
+        </div>
+
+        <!-- Mobile: Hamburger Menu -->
         <v-btn
-          @click="logout"
-          variant="outlined"
+          @click="showMobileMenu = !showMobileMenu"
+          icon="mdi-menu"
+          variant="text"
           color="white"
-          prepend-icon="mdi-logout"
-          class="text-none"
-        >
-          Logout
-        </v-btn>
+          class="d-md-none"
+        />
       </template>
     </v-app-bar>
+
+    <!-- Mobile Menu Drawer -->
+    <v-navigation-drawer
+      v-model="showMobileMenu"
+      location="right"
+      temporary
+      width="280"
+      class="d-md-none"
+    >
+      <v-list density="compact">
+        <v-list-subheader>Navigation</v-list-subheader>
+        
+        <v-list-item
+          @click="goToMaps"
+          prepend-icon="mdi-map-outline"
+          title="Manage Maps"
+          base-color="primary"
+        />
+
+        <v-divider class="my-2" />
+
+        <v-list-item
+          @click="logout"
+          prepend-icon="mdi-logout"
+          title="Logout"
+          base-color="error"
+        />
+      </v-list>
+    </v-navigation-drawer>
 
     <!-- Main Content -->
     <v-main>
@@ -265,9 +364,22 @@ function copyPin() {
                 prepend-icon="mdi-plus"
                 :loading="isCreating"
                 :disabled="isCreating"
-                class="text-none font-weight-bold px-8"
+                class="text-none font-weight-bold px-8 mb-4"
               >
                 {{ isCreating ? 'Connecting...' : 'Start Session' }}
+              </v-btn>
+              
+              <div class="text-body-2 text-medium-emphasis mb-4">or</div>
+              
+              <v-btn
+                @click="goToMaps"
+                color="secondary"
+                size="large"
+                prepend-icon="mdi-map-outline"
+                variant="outlined"
+                class="text-none font-weight-bold px-8"
+              >
+                Manage Maps
               </v-btn>
             </v-card>
           </v-col>
@@ -347,6 +459,100 @@ function copyPin() {
             class="text-none font-weight-bold px-8"
           >
             Go to Map
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Map Selection Dialog -->
+    <v-dialog v-model="showMapSelection" max-width="600">
+      <v-card>
+        <v-card-title class="d-flex align-center justify-space-between">
+          <span class="text-h5 font-weight-bold">Select a Map</span>
+          <v-btn
+            @click="showMapSelection = false"
+            variant="text"
+            icon="mdi-close"
+            size="small"
+          />
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <p class="text-body-1 mb-6">
+            Choose a map for your session. Participants will follow this route.
+          </p>
+          
+          <v-radio-group v-model="selectedMapId">
+            <v-card
+              v-for="map in availableMaps"
+              :key="map.id"
+              variant="outlined"
+              class="mb-3"
+              :color="selectedMapId === map.id ? 'primary' : undefined"
+            >
+              <v-card-text class="pa-4">
+                <div class="d-flex align-start">
+                  <v-radio :value="map.id" class="mr-4" />
+                  
+                  <div class="flex-grow-1">
+                    <h3 class="text-h6 font-weight-bold mb-2">{{ map.name }}</h3>
+                    <p v-if="map.description" class="text-body-2 text-medium-emphasis mb-2">
+                      {{ map.description }}
+                    </p>
+                    <div class="d-flex align-center flex-wrap mb-2">
+                      <v-chip size="small" color="primary" variant="text" class="mr-2">
+                        {{ map.points.length }} waypoints
+                      </v-chip>
+                      <v-chip size="small" color="secondary" variant="text">
+                        by {{ map.createdBy }}
+                      </v-chip>
+                    </div>
+                  </div>
+                  
+                  <v-icon color="primary" size="large">mdi-map</v-icon>
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-radio-group>
+          
+          <v-alert
+            v-if="availableMaps.length === 0"
+            type="info"
+            variant="tonal"
+            class="mt-4"
+          >
+            <v-alert-title>No Maps Available</v-alert-title>
+            <div>You need to create a map first before starting a session.</div>
+            <template #append>
+              <v-btn
+                @click="showMapSelection = false; goToMaps()"
+                color="primary"
+                size="small"
+                class="text-none"
+              >
+                Create Map
+              </v-btn>
+            </template>
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions class="pa-6 pt-0">
+          <v-spacer />
+          <v-btn
+            @click="showMapSelection = false"
+            variant="text"
+            class="text-none"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            @click="confirmCreateSession"
+            color="primary"
+            :disabled="!selectedMapId"
+            :loading="isCreating"
+            class="text-none"
+          >
+            Create Session
           </v-btn>
         </v-card-actions>
       </v-card>

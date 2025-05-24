@@ -11,6 +11,7 @@ export interface Participant {
     timestamp: number
   }
   isOnline: boolean
+  isManager: boolean
   joinedAt: number
 }
 
@@ -20,15 +21,29 @@ export interface RoutePoint {
   type: 'start' | 'end' | 'waypoint'
 }
 
+export interface Route {
+  id: string
+  name: string
+  description?: string
+  points: RoutePoint[]
+  createdBy: string
+  createdAt: number
+  updatedAt: number
+  isTemplate: boolean
+}
+
 export interface Session {
   id: string
   pin: string
   managerId: string
   managerName: string
+  routeId?: string
+  route?: Route
   participants: { [key: string]: Participant } // Changed from Map to object for network transmission
-  route: RoutePoint[]
   createdAt: number
+  updatedAt: number
   isActive: boolean
+  endsAt?: number
 }
 
 export const useSessionStore = defineStore('session', () => {
@@ -220,16 +235,20 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function createSession(
-    managerName: string
+    managerName: string,
+    routeId?: string
   ): Promise<{ success: boolean; error?: string; joinedExisting?: boolean }> {
     if (!isConnected.value) {
       await initialize()
     }
 
     try {
-      const response = await websocketService.createSession(managerName)
+      const response = await websocketService.createSession(managerName, routeId)
 
       if (response.success && response.session) {
+        console.log('Session created/joined:', response.session)
+        console.log('Route data in session:', response.session.route)
+
         const joinedExisting = response.session.managerName !== managerName
 
         currentSession.value = response.session
@@ -277,7 +296,7 @@ export const useSessionStore = defineStore('session', () => {
         console.log('Joined session:', response.session)
 
         // Trigger route display if route exists
-        if (response.session.route && response.session.route.length > 0) {
+        if (response.session.route && response.session.route.points.length > 0) {
           console.log('Session has existing route, will display it')
         }
 
@@ -288,6 +307,37 @@ export const useSessionStore = defineStore('session', () => {
     } catch (error) {
       console.error('Error joining session:', error)
       return { success: false, error: 'Failed to join session' }
+    }
+  }
+
+  async function joinAsManager(
+    pin: string,
+    managerName: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isConnected.value) {
+      await initialize()
+    }
+
+    try {
+      const response = await websocketService.joinAsManager(pin, managerName, crypto.randomUUID())
+
+      if (response.success && response.session && response.participantId) {
+        currentSession.value = response.session
+        isManager.value = true
+        currentParticipantId.value = response.participantId
+
+        // Save to localStorage
+        saveSessionToStorage()
+
+        console.log('Joined session as manager:', response.session)
+
+        return { success: true }
+      } else {
+        return { success: false, error: response.error || 'Failed to join as manager' }
+      }
+    } catch (error) {
+      console.error('Error joining as manager:', error)
+      return { success: false, error: 'Failed to join as manager' }
     }
   }
 
@@ -330,8 +380,8 @@ export const useSessionStore = defineStore('session', () => {
         )
 
         if (response.success && response.route) {
-          // Update local session with the new route
-          currentSession.value.route = response.route.points || route
+          // Update local session with the complete route object
+          currentSession.value.route = response.route
           console.log('Route updated successfully')
         } else {
           console.error('Failed to update route:', response.error)
@@ -372,6 +422,7 @@ export const useSessionStore = defineStore('session', () => {
     initialize,
     createSession,
     joinSession,
+    joinAsManager,
     leaveSession,
     endSession,
     updateParticipantLocation,

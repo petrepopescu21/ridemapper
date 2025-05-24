@@ -27,6 +27,7 @@ export interface Participant {
   name: string
   location?: Location
   isOnline: boolean
+  isManager: boolean
   joinedAt: number
   lastSeen: number
 }
@@ -104,6 +105,15 @@ export interface ClientToServerEvents {
   ) => void
   'session:join': (
     data: { pin: string; participantName: string },
+    callback: (response: {
+      success: boolean
+      session?: SerializedSession
+      participantId?: string
+      error?: string
+    }) => void
+  ) => void
+  'session:join-as-manager': (
+    data: { pin: string; managerName: string; managerId: string },
     callback: (response: {
       success: boolean
       session?: SerializedSession

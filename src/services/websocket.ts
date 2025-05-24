@@ -11,7 +11,7 @@ export interface ServerToClientEvents {
   'location:updated': (data: { sessionId: string; participantId: string; location: any }) => void
 
   // Route events
-  'route:updated': (data: { sessionId: string; route: any[] }) => void
+  'route:updated': (data: { sessionId: string; route: any }) => void
 
   // Message events
   'message:received': (data: any) => void
@@ -23,11 +23,20 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   // Session management
   'session:create': (
-    data: { managerName: string },
+    data: { managerName: string; routeId?: string },
     callback: (response: { success: boolean; session?: any; error?: string }) => void
   ) => void
   'session:join': (
     data: { pin: string; participantName: string },
+    callback: (response: {
+      success: boolean
+      session?: any
+      participantId?: string
+      error?: string
+    }) => void
+  ) => void
+  'session:join-as-manager': (
+    data: { pin: string; managerName: string; managerId: string },
     callback: (response: {
       success: boolean
       session?: any
@@ -124,14 +133,17 @@ class WebSocketService {
   }
 
   // Session methods
-  createSession(managerName: string): Promise<{ success: boolean; session?: any; error?: string }> {
+  createSession(
+    managerName: string,
+    routeId?: string
+  ): Promise<{ success: boolean; session?: any; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket) {
         resolve({ success: false, error: 'Not connected to server' })
         return
       }
 
-      this.socket.emit('session:create', { managerName }, (response) => {
+      this.socket.emit('session:create', { managerName, routeId }, (response) => {
         resolve(response)
       })
     })
@@ -148,6 +160,23 @@ class WebSocketService {
       }
 
       this.socket.emit('session:join', { pin, participantName }, (response) => {
+        resolve(response)
+      })
+    })
+  }
+
+  joinAsManager(
+    pin: string,
+    managerName: string,
+    managerId: string
+  ): Promise<{ success: boolean; session?: any; participantId?: string; error?: string }> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve({ success: false, error: 'Not connected to server' })
+        return
+      }
+
+      this.socket.emit('session:join-as-manager', { pin, managerName, managerId }, (response) => {
         resolve(response)
       })
     })
