@@ -7,7 +7,7 @@ on:
 
 env:
   NODE_VERSION: '18'
-  HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+  HEROKU_APP_NAME: ${{ env.HEROKU_APP_NAME }}
 
 jobs:
   test:
@@ -77,7 +77,7 @@ jobs:
     needs: [test, build]
     environment:
       name: production
-      url: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com
+      url: https://${{ env.HEROKU_APP_NAME }}.herokuapp.com
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -104,7 +104,7 @@ jobs:
         uses: akhileshns/heroku-deploy@v3.14.15
         with:
           heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_app_name: ${{ env.HEROKU_APP_NAME }}
           heroku_email: ${{ secrets.HEROKU_EMAIL }}
           usedocker: false
           buildpack: heroku/nodejs
@@ -116,9 +116,9 @@ jobs:
           curl https://cli-assets.heroku.com/install.sh | sh
 
           # Set config variables
-          heroku config:set NODE_ENV=production --app=${{ secrets.HEROKU_APP_NAME }}
-          heroku config:set HOST=0.0.0.0 --app=${{ secrets.HEROKU_APP_NAME }}
-          heroku config:set VITE_GOOGLE_MAPS_API_KEY="${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" --app=${{ secrets.HEROKU_APP_NAME }}
+          heroku config:set NODE_ENV=production --app=${{ env.HEROKU_APP_NAME }}
+          heroku config:set HOST=0.0.0.0 --app=${{ env.HEROKU_APP_NAME }}
+          heroku config:set VITE_GOOGLE_MAPS_API_KEY="${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" --app=${{ env.HEROKU_APP_NAME }}
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
 
@@ -127,7 +127,7 @@ jobs:
           echo "Waiting for deployment to complete..."
           sleep 30
 
-          APP_URL="https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+          APP_URL="https://${{ env.HEROKU_APP_NAME }}.herokuapp.com"
 
           # Try health check up to 5 times
           for i in {1..5}; do
@@ -142,17 +142,17 @@ jobs:
           done
 
           echo "❌ Health check failed after 5 attempts"
-          echo "Check the logs: heroku logs --tail --app=${{ secrets.HEROKU_APP_NAME }}"
+          echo "Check the logs: heroku logs --tail --app=${{ env.HEROKU_APP_NAME }}"
           exit 1
 
       - name: Deployment summary
         if: success()
         run: |
           echo "🎉 Deployment completed successfully!"
-          echo "📱 App: ${{ secrets.HEROKU_APP_NAME }}"
-          echo "🌐 URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
-          echo "🏥 Health: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
-          echo "📊 Logs: heroku logs --tail --app=${{ secrets.HEROKU_APP_NAME }}"
+          echo "📱 App: ${{ env.HEROKU_APP_NAME }}"
+          echo "🌐 URL: https://${{ env.HEROKU_APP_NAME }}.herokuapp.com"
+          echo "🏥 Health: https://${{ env.HEROKU_APP_NAME }}.herokuapp.com/health"
+          echo "📊 Logs: heroku logs --tail --app=${{ env.HEROKU_APP_NAME }}"
 
   notify:
     name: Send Notifications
@@ -164,7 +164,7 @@ jobs:
         if: needs.deploy.result == 'success'
         run: |
           echo "✅ RideMapper successfully deployed to Heroku!"
-          echo "🌐 Live at: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+          echo "🌐 Live at: https://${{ env.HEROKU_APP_NAME }}.herokuapp.com"
 
       - name: Deployment Failure Notification
         if: needs.deploy.result == 'failure'
