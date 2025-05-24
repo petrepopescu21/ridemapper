@@ -177,19 +177,6 @@ npm run type-check       # Client
 cd server && npm run type-check  # Server
 ```
 
-### Docker Development
-
-```bash
-# Development with hot reload
-npm run docker:dev
-
-# Production simulation
-npm run docker:up
-
-# Cleanup
-npm run docker:down
-```
-
 ## Monitoring & Troubleshooting
 
 ### Health Checks

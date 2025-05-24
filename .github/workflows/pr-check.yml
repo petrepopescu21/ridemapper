@@ -60,36 +60,10 @@ jobs:
       - name: Audit server dependencies
         run: cd server && npm audit --audit-level moderate
 
-  docker-test:
-    name: Test Docker Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Test client Docker build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: ridemapper-client:test
-
-      - name: Test server Docker build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./server
-          file: ./server/Dockerfile
-          push: false
-          tags: ridemapper-server:test
-
   comment:
     name: PR Comment
     runs-on: ubuntu-latest
-    needs: [test, security, docker-test]
+    needs: [test, security]
     if: always() && github.event_name == 'pull_request'
     permissions:
       pull-requests: write
@@ -111,11 +85,6 @@ jobs:
             if (needs.security?.result === 'failure') {
               status = '⚠️ Security issues found';
               details += '- 🔒 Security audit found vulnerabilities\n';
-            }
-            
-            if (needs['docker-test']?.result === 'failure') {
-              status = '🐳 Docker build failed';
-              details += '- 🐳 Docker build tests failed\n';
             }
             
             const body = `## 🚀 RideMapper PR Check Results

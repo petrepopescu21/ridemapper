@@ -20,7 +20,7 @@ A real-time location tracking and route management application built with Vue.js
 - **Frontend**: Vue.js 3, TypeScript, Vuetify, Pinia
 - **Backend**: Node.js, Express, Socket.io, TypeScript
 - **Maps**: Google Maps JavaScript API + Routes API
-- **Deployment**: Docker, Kubernetes, Heroku
+- **Deployment**: Heroku
 - **Development**: Vite, Hot Module Replacement, Concurrently
 
 ## Quick Start
@@ -50,17 +50,7 @@ A real-time location tracking and route management application built with Vue.js
    npm run dev:all
    ```
 
-   This starts both the client (http://localhost:5173) and server (http://localhost:3001)
-
-### Docker Development
-
-```bash
-# Development with hot reload
-npm run docker:dev
-
-# Production build
-npm run docker:up
-```
+   This starts both the client (http://localhost:5173) and server (http://localhost:3002)
 
 ## Heroku Deployment 🚀
 
@@ -168,10 +158,6 @@ npm run type-check      # TypeScript check
 # Server only
 npm run server:dev      # Server dev with nodemon
 npm run server:build    # Build server
-
-# Docker
-npm run docker:dev      # Development with Docker
-npm run docker:up       # Production with Docker
 
 # Deployment
 npm run heroku-postbuild # Heroku build hook

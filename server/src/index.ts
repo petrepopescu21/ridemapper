@@ -240,7 +240,7 @@ setInterval(() => {
   sessionManager.cleanup()
 }, 60 * 60 * 1000)
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3002
 
 server.listen(PORT, () => {
   console.log(`RideMapper server running on port ${PORT}`)
