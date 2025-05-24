@@ -55,12 +55,12 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions
 
 Add the following secrets:
 
-| Secret Name | Description | How to Get |
-|-------------|-------------|------------|
-| `HEROKU_API_KEY` | Heroku API token | `heroku auth:token` |
-| `HEROKU_APP_NAME` | Your Heroku app name | Create app or use existing |
-| `HEROKU_EMAIL` | Your Heroku account email | Your login email |
-| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps API key | From Google Cloud Console |
+| Secret Name                | Description               | How to Get                 |
+| -------------------------- | ------------------------- | -------------------------- |
+| `HEROKU_API_KEY`           | Heroku API token          | `heroku auth:token`        |
+| `HEROKU_APP_NAME`          | Your Heroku app name      | Create app or use existing |
+| `HEROKU_EMAIL`             | Your Heroku account email | Your login email           |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps API key       | From Google Cloud Console  |
 
 ### 3. Create Heroku App (if needed)
 
@@ -114,11 +114,13 @@ npm run heroku:deploy:win
 ### Step-by-Step Manual Deploy
 
 1. **Login to Heroku**
+
    ```bash
    heroku login
    ```
 
 2. **Create/Configure App**
+
    ```bash
    heroku create your-app-name
    heroku config:set NODE_ENV=production
@@ -126,6 +128,7 @@ npm run heroku:deploy:win
    ```
 
 3. **Deploy**
+
    ```bash
    git push heroku main
    ```
@@ -140,12 +143,14 @@ npm run heroku:deploy:win
 ### Environment Setup
 
 1. **Clone repository**
+
    ```bash
    git clone https://github.com/your-username/ridemapper.git
    cd ridemapper
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    npm run install:server
@@ -153,8 +158,11 @@ npm run heroku:deploy:win
 
 3. **Set up environment**
    ```bash
-   cp env.example .env
-   # Edit .env with your Google Maps API key
+   # Create .env file with required variables
+   echo "VITE_GOOGLE_MAPS_API_KEY=your_api_key_here" > .env
+   echo "NODE_ENV=development" >> .env
+   echo "PORT=3200" >> .env
+   # Add other required variables as needed
    ```
 
 ### Development Commands
@@ -208,7 +216,8 @@ heroku open --app=your-app-name
 #### 1. Build Failures
 
 **Problem**: `npm run build` fails
-**Solution**: 
+**Solution**:
+
 - Check Google Maps API key is set
 - Verify all dependencies are installed
 - Check TypeScript errors
@@ -217,6 +226,7 @@ heroku open --app=your-app-name
 
 **Problem**: App crashes on startup
 **Solution**:
+
 - Check Heroku logs: `heroku logs --tail`
 - Verify environment variables
 - Check server build artifacts exist
@@ -225,6 +235,7 @@ heroku open --app=your-app-name
 
 **Problem**: Maps don't load
 **Solution**:
+
 - Verify API key in Heroku config
 - Check API restrictions in Google Cloud
 - Ensure billing is enabled for Google Cloud project
@@ -233,6 +244,7 @@ heroku open --app=your-app-name
 
 **Problem**: Real-time features don't work
 **Solution**:
+
 - Check browser console for connection errors
 - Verify CORS settings in server
 - Check Heroku app logs for WebSocket errors
@@ -287,6 +299,7 @@ heroku ps --app=your-app-name
 ### Database (Future Enhancement)
 
 For persistence, consider adding:
+
 - Heroku Postgres
 - Redis for session storage
 - MongoDB Atlas
@@ -333,4 +346,4 @@ heroku ps
 
 ---
 
-*For more detailed information, check the main [README.md](README.md) file.* 
+_For more detailed information, check the main [README.md](README.md) file._

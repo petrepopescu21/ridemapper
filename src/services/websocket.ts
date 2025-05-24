@@ -6,37 +6,70 @@ export interface ServerToClientEvents {
   'session:left': (data: { sessionId: string; participantId: string }) => void
   'session:ended': (data: { sessionId: string }) => void
   'session:participant-update': (data: { sessionId: string; participant: any }) => void
-  
+
   // Location events
   'location:updated': (data: { sessionId: string; participantId: string; location: any }) => void
-  
+
   // Route events
   'route:updated': (data: { sessionId: string; route: any[] }) => void
-  
+
   // Message events
   'message:received': (data: any) => void
-  
+
   // Error events
-  'error': (data: { message: string; code?: string }) => void
+  error: (data: { message: string; code?: string }) => void
 }
 
 export interface ClientToServerEvents {
   // Session management
-  'session:create': (data: { managerName: string }, callback: (response: { success: boolean; session?: any; error?: string }) => void) => void
-  'session:join': (data: { pin: string; participantName: string }, callback: (response: { success: boolean; session?: any; participantId?: string; error?: string }) => void) => void
+  'session:create': (
+    data: { managerName: string },
+    callback: (response: { success: boolean; session?: any; error?: string }) => void
+  ) => void
+  'session:join': (
+    data: { pin: string; participantName: string },
+    callback: (response: {
+      success: boolean
+      session?: any
+      participantId?: string
+      error?: string
+    }) => void
+  ) => void
   'session:leave': (data: { sessionId: string; participantId: string }) => void
   'session:end': (data: { sessionId: string; managerId: string }) => void
-  'session:rejoin': (data: { sessionId: string; participantId: string }, callback: (response: { success: boolean; session?: any; error?: string }) => void) => void
-  'session:validate-manager': (data: { sessionId: string; managerId: string }, callback: (response: { success: boolean; session?: any; error?: string }) => void) => void
-  
+  'session:rejoin': (
+    data: { sessionId: string; participantId: string },
+    callback: (response: { success: boolean; session?: any; error?: string }) => void
+  ) => void
+  'session:validate-manager': (
+    data: { sessionId: string; managerId: string },
+    callback: (response: { success: boolean; session?: any; error?: string }) => void
+  ) => void
+
   // Location updates
-  'location:update': (data: { sessionId: string; participantId: string; location: { lat: number; lng: number } }) => void
-  
+  'location:update': (data: {
+    sessionId: string
+    participantId: string
+    location: { lat: number; lng: number }
+  }) => void
+
   // Route management
   'route:update': (data: { sessionId: string; managerId: string; route: any[] }) => void
-  
+
+  // Session route management
+  'session:update-route': (
+    data: { sessionId: string; points: any[]; managerId: string },
+    callback: (response: { success: boolean; route?: any; error?: string }) => void
+  ) => void
+
   // Messaging
-  'message:send': (data: { sessionId: string; from: string; to: string; content: string; type: 'direct' | 'broadcast' }) => void
+  'message:send': (data: {
+    sessionId: string
+    from: string
+    to: string
+    content: string
+    type: 'direct' | 'broadcast'
+  }) => void
 }
 
 class WebSocketService {
@@ -46,10 +79,10 @@ class WebSocketService {
   connect(): Promise<Socket<ServerToClientEvents, ClientToServerEvents>> {
     return new Promise((resolve, reject) => {
       // Get server URL from environment or default to localhost
-      const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-      
+      const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3200'
+
       console.log('Connecting to WebSocket server at:', serverUrl)
-      
+
       this.socket = io(serverUrl, {
         transports: ['websocket', 'polling'],
         timeout: 10000,
@@ -104,7 +137,10 @@ class WebSocketService {
     })
   }
 
-  joinSession(pin: string, participantName: string): Promise<{ success: boolean; session?: any; participantId?: string; error?: string }> {
+  joinSession(
+    pin: string,
+    participantName: string
+  ): Promise<{ success: boolean; session?: any; participantId?: string; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket) {
         resolve({ success: false, error: 'Not connected to server' })
@@ -135,19 +171,43 @@ class WebSocketService {
     }
   }
 
-  updateRoute(sessionId: string, managerId: string, route: any[]) {
-    if (this.socket) {
-      this.socket.emit('route:update', { sessionId, managerId, route })
-    }
+  updateRoute(
+    sessionId: string,
+    managerId: string,
+    route: any[]
+  ): Promise<{ success: boolean; route?: any; error?: string }> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve({ success: false, error: 'Not connected to server' })
+        return
+      }
+
+      this.socket.emit(
+        'session:update-route',
+        { sessionId, points: route, managerId },
+        (response) => {
+          resolve(response)
+        }
+      )
+    })
   }
 
-  sendMessage(sessionId: string, from: string, to: string, content: string, type: 'direct' | 'broadcast' = 'broadcast') {
+  sendMessage(
+    sessionId: string,
+    from: string,
+    to: string,
+    content: string,
+    type: 'direct' | 'broadcast' = 'broadcast'
+  ) {
     if (this.socket) {
       this.socket.emit('message:send', { sessionId, from, to, content, type })
     }
   }
 
-  validateManagerSession(sessionId: string, managerId: string): Promise<{ success: boolean; session?: any; error?: string }> {
+  validateManagerSession(
+    sessionId: string,
+    managerId: string
+  ): Promise<{ success: boolean; session?: any; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket) {
         resolve({ success: false, error: 'Not connected to server' })
@@ -160,7 +220,10 @@ class WebSocketService {
     })
   }
 
-  rejoinSession(sessionId: string, participantId: string): Promise<{ success: boolean; session?: any; error?: string }> {
+  rejoinSession(
+    sessionId: string,
+    participantId: string
+  ): Promise<{ success: boolean; session?: any; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket) {
         resolve({ success: false, error: 'Not connected to server' })
@@ -174,4 +237,4 @@ class WebSocketService {
   }
 }
 
-export const websocketService = new WebSocketService() 
+export const websocketService = new WebSocketService()

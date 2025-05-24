@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  points      Json     // Array of RoutePoint objects
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isTemplate  Boolean  @default(true) // true for template routes, false for session-specific routes
+  
+  // Relationships
+  sessions    Session[]
+  
+  @@map("routes")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  pin          String   @unique
+  managerId    String
+  managerName  String
+  routeId      String?  // Optional: can create session without route
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  isActive     Boolean  @default(true)
+  endsAt       DateTime?
+  
+  // Relationships
+  route        Route?      @relation(fields: [routeId], references: [id])
+  messages     Message[]
+  
+  @@map("sessions")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  fromId    String   // Participant ID as string (no foreign key)
+  toId      String?  // Participant ID as string, null for broadcast messages
+  content   String
+  type      MessageType
+  createdAt DateTime @default(now())
+  
+  // Relationships
+  session   Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
+}
+
+enum MessageType {
+  DIRECT
+  BROADCAST
+} 

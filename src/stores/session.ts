@@ -25,7 +25,7 @@ export interface Session {
   pin: string
   managerId: string
   managerName: string
-  participants: { [key: string]: Participant }  // Changed from Map to object for network transmission
+  participants: { [key: string]: Participant } // Changed from Map to object for network transmission
   route: RoutePoint[]
   createdAt: number
   isActive: boolean
@@ -40,7 +40,7 @@ export const useSessionStore = defineStore('session', () => {
 
   const activeParticipants = computed(() => {
     if (!currentSession.value) return []
-    return Object.values(currentSession.value.participants).filter(p => p.isOnline)
+    return Object.values(currentSession.value.participants).filter((p) => p.isOnline)
   })
 
   // Session persistence
@@ -52,20 +52,24 @@ export const useSessionStore = defineStore('session', () => {
         session: currentSession.value,
         isManager: isManager.value,
         participantId: currentParticipantId.value,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData))
       console.log('Session saved to localStorage')
     }
   }
 
-  function loadSessionFromStorage(): { session: Session; isManager: boolean; participantId: string } | null {
+  function loadSessionFromStorage(): {
+    session: Session
+    isManager: boolean
+    participantId: string
+  } | null {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (!stored) return null
 
       const sessionData = JSON.parse(stored)
-      
+
       // Check if session is not too old (max 24 hours)
       const maxAge = 24 * 60 * 60 * 1000
       if (Date.now() - sessionData.timestamp > maxAge) {
@@ -110,10 +114,10 @@ export const useSessionStore = defineStore('session', () => {
       if (storedSession.isManager) {
         // Validate that session still exists by trying to create/rejoin
         const response = await websocketService.validateManagerSession(
-          storedSession.session.id, 
+          storedSession.session.id,
           storedSession.participantId
         )
-        
+
         if (response.success && response.session) {
           currentSession.value = response.session
           isManager.value = true
@@ -129,7 +133,7 @@ export const useSessionStore = defineStore('session', () => {
           storedSession.session.id,
           storedSession.participantId
         )
-        
+
         if (response.success && response.session) {
           currentSession.value = response.session
           isManager.value = false
@@ -144,7 +148,6 @@ export const useSessionStore = defineStore('session', () => {
       // If recovery failed, clear storage
       clearSessionFromStorage()
       return { success: false, error: 'Session no longer exists on server' }
-      
     } catch (error) {
       console.error('Session recovery failed:', error)
       clearSessionFromStorage()
@@ -158,10 +161,10 @@ export const useSessionStore = defineStore('session', () => {
       connectionError.value = null
       await websocketService.connect()
       isConnected.value = true
-      
+
       // Set up event listeners
       setupEventListeners()
-      
+
       console.log('WebSocket connection established')
     } catch (error) {
       console.error('Failed to connect to WebSocket server:', error)
@@ -216,24 +219,33 @@ export const useSessionStore = defineStore('session', () => {
     })
   }
 
-  async function createSession(managerName: string): Promise<{ success: boolean; error?: string }> {
+  async function createSession(
+    managerName: string
+  ): Promise<{ success: boolean; error?: string; joinedExisting?: boolean }> {
     if (!isConnected.value) {
       await initialize()
     }
 
     try {
       const response = await websocketService.createSession(managerName)
-      
+
       if (response.success && response.session) {
+        const joinedExisting = response.session.managerName !== managerName
+
         currentSession.value = response.session
         isManager.value = true
         currentParticipantId.value = response.session.managerId
-        
+
         // Save to localStorage
         saveSessionToStorage()
-        
-        console.log('Session created:', response.session)
-        return { success: true }
+
+        if (joinedExisting) {
+          console.log('Joined existing session:', response.session)
+        } else {
+          console.log('Created new session:', response.session)
+        }
+
+        return { success: true, joinedExisting }
       } else {
         return { success: false, error: response.error || 'Failed to create session' }
       }
@@ -243,29 +255,32 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  async function joinSession(pin: string, participantName: string): Promise<{ success: boolean; error?: string }> {
+  async function joinSession(
+    pin: string,
+    participantName: string
+  ): Promise<{ success: boolean; error?: string }> {
     if (!isConnected.value) {
       await initialize()
     }
 
     try {
       const response = await websocketService.joinSession(pin, participantName)
-      
+
       if (response.success && response.session && response.participantId) {
         currentSession.value = response.session
         isManager.value = false
         currentParticipantId.value = response.participantId
-        
+
         // Save to localStorage
         saveSessionToStorage()
-        
+
         console.log('Joined session:', response.session)
-        
+
         // Trigger route display if route exists
         if (response.session.route && response.session.route.length > 0) {
           console.log('Session has existing route, will display it')
         }
-        
+
         return { success: true }
       } else {
         return { success: false, error: response.error || 'Failed to join session' }
@@ -298,13 +313,32 @@ export const useSessionStore = defineStore('session', () => {
 
   function updateParticipantLocation(lat: number, lng: number) {
     if (currentSession.value && currentParticipantId.value) {
-      websocketService.updateLocation(currentSession.value.id, currentParticipantId.value, { lat, lng })
+      websocketService.updateLocation(currentSession.value.id, currentParticipantId.value, {
+        lat,
+        lng,
+      })
     }
   }
 
-  function updateRoute(route: RoutePoint[]) {
+  async function updateRoute(route: RoutePoint[]) {
     if (currentSession.value && isManager.value && currentParticipantId.value) {
-      websocketService.updateRoute(currentSession.value.id, currentParticipantId.value, route)
+      try {
+        const response = await websocketService.updateRoute(
+          currentSession.value.id,
+          currentParticipantId.value,
+          route
+        )
+
+        if (response.success && response.route) {
+          // Update local session with the new route
+          currentSession.value.route = response.route.points || route
+          console.log('Route updated successfully')
+        } else {
+          console.error('Failed to update route:', response.error)
+        }
+      } catch (error) {
+        console.error('Error updating route:', error)
+      }
     }
   }
 
@@ -345,6 +379,6 @@ export const useSessionStore = defineStore('session', () => {
     disconnect,
     recoverSession,
     saveSessionToStorage,
-    clearSessionFromStorage
+    clearSessionFromStorage,
   }
-}) 
+})

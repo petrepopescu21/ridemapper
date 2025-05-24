@@ -5,6 +5,8 @@ import cors from 'cors'
 import path from 'path'
 import { config } from 'dotenv'
 import { SessionManager } from './services/SessionManager'
+import { RouteService } from './services/RouteService'
+import { DatabaseService } from './services/DatabaseService'
 import { ServerToClientEvents, ClientToServerEvents, SerializedSession } from './types'
 
 // Load environment variables from .env file in project root
@@ -14,99 +16,128 @@ const app = express()
 const server = createServer(app)
 const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(server, {
   cors: {
-    origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? false : "http://localhost:5173"),
-    methods: ["GET", "POST"]
-  }
+    origin:
+      process.env.CLIENT_URL ||
+      (process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173'),
+    methods: ['GET', 'POST'],
+  },
 })
 
 // Helper function to serialize session
 function serializeSession(session: any): SerializedSession {
   return {
     ...session,
-    participants: Object.fromEntries(session.participants)
+    participants: Object.fromEntries(session.participants),
   }
 }
 
 // Middleware
-app.use(cors({
-  origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? false : "http://localhost:5173")
-}))
+app.use(
+  cors({
+    origin:
+      process.env.CLIENT_URL ||
+      (process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173'),
+  })
+)
 app.use(express.json())
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   // Serve static files from the Vue.js build
   app.use(express.static(path.join(__dirname, '../client-dist')))
-  
+
   // Handle client-side routing - serve index.html for non-API routes
   app.get('*', (req, res, next) => {
     // Skip API routes and socket.io
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/health')) {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/socket.io') ||
+      req.path.startsWith('/health')
+    ) {
       return next()
     }
     res.sendFile(path.join(__dirname, '../client-dist/index.html'))
   })
 }
 
-// Services
+// Initialize services
+const databaseService = DatabaseService.getInstance()
 const sessionManager = new SessionManager()
+const routeService = new RouteService()
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy',
+app.get('/health', async (req, res) => {
+  const dbHealth = await databaseService.healthCheck()
+  res.json({
+    status: dbHealth ? 'healthy' : 'unhealthy',
+    database: dbHealth ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     activeSessions: sessionManager.getAllActiveSessions().length,
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
   })
 })
+
+// Initialize database and services
+async function initializeServer() {
+  try {
+    await databaseService.connect()
+    await sessionManager.initialize()
+    console.log('🚀 Server services initialized successfully')
+  } catch (error) {
+    console.error('❌ Failed to initialize server services:', error)
+    process.exit(1)
+  }
+}
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`)
 
   // Session management
-  socket.on('session:create', (data, callback) => {
+  socket.on('session:create', async (data, callback) => {
     try {
-      const session = sessionManager.createSession(data.managerName)
-      
+      const session = await sessionManager.createSession(data.managerName, data.routeId)
+
       // Join the socket to the session room
       socket.join(session.id)
-      
+
       // Serialize the session for transmission
       const serializedSession = serializeSession(session)
-      
+
       callback({ success: true, session: serializedSession })
       console.log(`Manager ${data.managerName} created session ${session.pin}`)
     } catch (error) {
       console.error('Error creating session:', error)
-      callback({ success: false, error: 'Failed to create session' })
+      callback({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create session',
+      })
     }
   })
 
-  socket.on('session:join', (data, callback) => {
+  socket.on('session:join', async (data, callback) => {
     try {
-      const result = sessionManager.joinSession(data.pin, data.participantName)
-      
+      const result = await sessionManager.joinSession(data.pin, data.participantName)
+
       if (result.success && result.session && result.participantId) {
         // Join the socket to the session room
         socket.join(result.session.id)
-        
+
         // Serialize the session for transmission
         const serializedSession = serializeSession(result.session)
-        
+
         // Notify other participants
         socket.to(result.session.id).emit('session:joined', {
           sessionId: result.session.id,
-          participant: result.session.participants.get(result.participantId)!
+          participant: result.session.participants.get(result.participantId)!,
         })
-        
-        callback({ 
-          success: true, 
-          session: serializedSession, 
-          participantId: result.participantId 
+
+        callback({
+          success: true,
+          session: serializedSession,
+          participantId: result.participantId,
         })
-        
+
         console.log(`${data.participantName} joined session ${data.pin}`)
       } else {
         callback({ success: false, error: result.error })
@@ -117,27 +148,27 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on('session:leave', (data) => {
+  socket.on('session:leave', async (data) => {
     try {
-      const result = sessionManager.leaveSession(data.participantId)
-      
+      const result = await sessionManager.leaveSession(data.participantId)
+
       if (result.success && result.sessionId) {
         // Leave the socket room
         socket.leave(result.sessionId)
-        
+
         // Notify other participants
         socket.to(result.sessionId).emit('session:left', {
           sessionId: result.sessionId,
-          participantId: data.participantId
+          participantId: data.participantId,
         })
-        
+
         // If manager left, notify all participants that session ended
         if (result.wasManager) {
           socket.to(result.sessionId).emit('session:ended', {
-            sessionId: result.sessionId
+            sessionId: result.sessionId,
           })
         }
-        
+
         console.log(`Participant ${data.participantId} left session ${result.sessionId}`)
       }
     } catch (error) {
@@ -145,18 +176,18 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on('session:end', (data) => {
+  socket.on('session:end', async (data) => {
     try {
       const session = sessionManager.getSession(data.sessionId)
       if (session && session.managerId === data.managerId) {
         // Notify all participants
         socket.to(data.sessionId).emit('session:ended', {
-          sessionId: data.sessionId
+          sessionId: data.sessionId,
         })
-        
+
         // End the session
-        sessionManager.endSession(data.sessionId)
-        
+        await sessionManager.endSession(data.sessionId)
+
         console.log(`Session ${data.sessionId} ended by manager`)
       }
     } catch (error) {
@@ -165,21 +196,21 @@ io.on('connection', (socket) => {
   })
 
   // Session recovery handlers
-  socket.on('session:validate-manager', (data, callback) => {
+  socket.on('session:validate-manager', async (data, callback) => {
     try {
-      const session = sessionManager.getSession(data.sessionId)
-      
-      if (session && session.isActive && session.managerId === data.managerId) {
+      const result = await sessionManager.validateManager(data.sessionId, data.managerId)
+
+      if (result.success && result.session) {
         // Rejoin the socket to the session room
-        socket.join(session.id)
-        
+        socket.join(result.session.id)
+
         // Serialize the session for transmission
-        const serializedSession = serializeSession(session)
-        
+        const serializedSession = serializeSession(result.session)
+
         callback({ success: true, session: serializedSession })
-        console.log(`Manager reconnected to session ${session.pin}`)
+        console.log(`Manager reconnected to session ${result.session.pin}`)
       } else {
-        callback({ success: false, error: 'Session not found or access denied' })
+        callback({ success: false, error: result.error || 'Session not found or access denied' })
       }
     } catch (error) {
       console.error('Error validating manager session:', error)
@@ -187,28 +218,28 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on('session:rejoin', (data, callback) => {
+  socket.on('session:rejoin', async (data, callback) => {
     try {
       const session = sessionManager.getParticipantSession(data.participantId)
-      
+
       if (session && session.isActive && session.id === data.sessionId) {
         // Mark participant as online
         const participant = session.participants.get(data.participantId)
         if (participant) {
           participant.isOnline = true
-          
+
           // Rejoin the socket to the session room
           socket.join(session.id)
-          
+
           // Serialize the session for transmission
           const serializedSession = serializeSession(session)
-          
+
           // Notify other participants that this participant is back online
           socket.to(session.id).emit('session:joined', {
             sessionId: session.id,
-            participant: participant
+            participant: participant,
           })
-          
+
           callback({ success: true, session: serializedSession })
           console.log(`Participant ${participant.name} reconnected to session ${session.pin}`)
         } else {
@@ -224,20 +255,20 @@ io.on('connection', (socket) => {
   })
 
   // Location updates
-  socket.on('location:update', (data) => {
+  socket.on('location:update', async (data) => {
     try {
-      const result = sessionManager.updateParticipantLocation(
+      const result = await sessionManager.updateParticipantLocation(
         data.participantId,
         data.location.lat,
         data.location.lng
       )
-      
+
       if (result.success && result.sessionId) {
         // Broadcast location update to all participants in the session
         socket.to(result.sessionId).emit('location:updated', {
           sessionId: result.sessionId,
           participantId: data.participantId,
-          location: data.location
+          location: data.location,
         })
       }
     } catch (error) {
@@ -246,21 +277,174 @@ io.on('connection', (socket) => {
   })
 
   // Route management
-  socket.on('route:update', (data) => {
+  socket.on('route:create', async (data, callback) => {
     try {
-      const success = sessionManager.updateRoute(data.sessionId, data.managerId, data.route)
-      
-      if (success) {
-        // Broadcast route update to all participants
-        socket.to(data.sessionId).emit('route:updated', {
-          sessionId: data.sessionId,
-          route: data.route
-        })
-        
-        console.log(`Route updated for session ${data.sessionId}`)
+      const route = await routeService.createRoute(
+        data.name,
+        data.points,
+        data.createdBy,
+        data.description,
+        data.isTemplate
+      )
+
+      callback({ success: true, route })
+
+      // Broadcast route creation to interested clients
+      io.emit('route:created', { route })
+
+      console.log(`Route "${data.name}" created by ${data.createdBy}`)
+    } catch (error) {
+      console.error('Error creating route:', error)
+      callback({ success: false, error: 'Failed to create route' })
+    }
+  })
+
+  socket.on('route:update', async (data, callback) => {
+    try {
+      const route = await routeService.updateRoute(data.routeId, data.updatedBy, {
+        name: data.name,
+        description: data.description,
+        points: data.points,
+      })
+
+      if (route) {
+        callback({ success: true, route })
+        console.log(`Route ${data.routeId} updated by ${data.updatedBy}`)
+      } else {
+        callback({ success: false, error: 'Route not found or permission denied' })
       }
     } catch (error) {
       console.error('Error updating route:', error)
+      callback({ success: false, error: 'Failed to update route' })
+    }
+  })
+
+  socket.on('route:delete', async (data, callback) => {
+    try {
+      const success = await routeService.deleteRoute(data.routeId, data.deletedBy)
+
+      if (success) {
+        callback({ success: true })
+        console.log(`Route ${data.routeId} deleted by ${data.deletedBy}`)
+      } else {
+        callback({ success: false, error: 'Route not found or cannot be deleted' })
+      }
+    } catch (error) {
+      console.error('Error deleting route:', error)
+      callback({ success: false, error: 'Failed to delete route' })
+    }
+  })
+
+  socket.on('route:list', async (data, callback) => {
+    try {
+      const routes = await routeService.listRoutes({
+        createdBy: data.createdBy,
+        templatesOnly: data.templatesOnly,
+      })
+
+      callback({ success: true, routes })
+    } catch (error) {
+      console.error('Error listing routes:', error)
+      callback({ success: false, error: 'Failed to list routes' })
+    }
+  })
+
+  socket.on('route:get', async (data, callback) => {
+    try {
+      const route = await routeService.getRoute(data.routeId)
+
+      if (route) {
+        callback({ success: true, route })
+      } else {
+        callback({ success: false, error: 'Route not found' })
+      }
+    } catch (error) {
+      console.error('Error getting route:', error)
+      callback({ success: false, error: 'Failed to get route' })
+    }
+  })
+
+  socket.on('route:assign-to-session', async (data, callback) => {
+    try {
+      const success = await sessionManager.assignRouteToSession(
+        data.sessionId,
+        data.routeId,
+        data.managerId
+      )
+
+      if (success) {
+        const session = sessionManager.getSession(data.sessionId)
+        if (session && session.route) {
+          // Broadcast route update to all participants
+          socket.to(data.sessionId).emit('route:updated', {
+            sessionId: data.sessionId,
+            route: session.route,
+          })
+        }
+
+        callback({ success: true })
+        console.log(`Route ${data.routeId} assigned to session ${data.sessionId}`)
+      } else {
+        callback({ success: false, error: 'Failed to assign route to session' })
+      }
+    } catch (error) {
+      console.error('Error assigning route to session:', error)
+      callback({ success: false, error: 'Failed to assign route to session' })
+    }
+  })
+
+  // Session route management
+  socket.on('session:create-route', async (data, callback) => {
+    try {
+      const route = await sessionManager.createSessionRoute(
+        data.sessionId,
+        data.name,
+        data.points,
+        data.managerId,
+        data.description
+      )
+
+      if (route) {
+        // Broadcast route update to all participants
+        socket.to(data.sessionId).emit('route:updated', {
+          sessionId: data.sessionId,
+          route,
+        })
+
+        callback({ success: true, route })
+        console.log(`Session route "${data.name}" created for session ${data.sessionId}`)
+      } else {
+        callback({ success: false, error: 'Failed to create session route' })
+      }
+    } catch (error) {
+      console.error('Error creating session route:', error)
+      callback({ success: false, error: 'Failed to create session route' })
+    }
+  })
+
+  socket.on('session:update-route', async (data, callback) => {
+    try {
+      const route = await sessionManager.updateSessionRoute(
+        data.sessionId,
+        data.points,
+        data.managerId
+      )
+
+      if (route) {
+        // Broadcast route update to all participants
+        socket.to(data.sessionId).emit('route:updated', {
+          sessionId: data.sessionId,
+          route,
+        })
+
+        callback({ success: true, route })
+        console.log(`Session route updated for session ${data.sessionId}`)
+      } else {
+        callback({ success: false, error: 'Failed to update session route' })
+      }
+    } catch (error) {
+      console.error('Error updating session route:', error)
+      callback({ success: false, error: 'Failed to update session route' })
     }
   })
 
@@ -270,13 +454,13 @@ io.on('connection', (socket) => {
       const message = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         sessionId: data.sessionId,
-        from: data.from,
-        to: data.to,
+        fromId: data.fromId,
+        toId: data.toId,
         content: data.content,
         timestamp: Date.now(),
-        type: data.type
+        type: data.type,
       }
-      
+
       if (data.type === 'broadcast') {
         // Send to all participants in the session
         socket.to(data.sessionId).emit('message:received', message)
@@ -285,8 +469,10 @@ io.on('connection', (socket) => {
         // For now, broadcast to all and let client filter
         socket.to(data.sessionId).emit('message:received', message)
       }
-      
-      console.log(`Message sent from ${data.from} to ${data.to} in session ${data.sessionId}`)
+
+      console.log(
+        `Message sent from ${data.fromId} to ${data.toId || 'all'} in session ${data.sessionId}`
+      )
     } catch (error) {
       console.error('Error sending message:', error)
     }
@@ -298,15 +484,44 @@ io.on('connection', (socket) => {
   })
 })
 
+// Graceful shutdown
+async function gracefulShutdown(signal: string) {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`)
+
+  try {
+    // Close the server
+    server.close(() => {
+      console.log('📡 HTTP server closed')
+    })
+
+    // Disconnect from database
+    await databaseService.disconnect()
+
+    console.log('✅ Graceful shutdown completed')
+    process.exit(0)
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error)
+    process.exit(1)
+  }
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+
 // Cleanup job - run every hour
-setInterval(() => {
-  sessionManager.cleanup()
+setInterval(async () => {
+  await sessionManager.cleanup()
 }, 60 * 60 * 1000)
 
-const PORT = Number(process.env.PORT) || 3000
+const PORT = Number(process.env.PORT) || 3200
 const HOST = process.env.HOST || '127.0.0.1'
 
-server.listen(PORT, HOST, () => {
-  console.log(`RideMapper server running on http://${HOST}:${PORT}`)
-  console.log(`WebSocket server ready for connections`)
-}) 
+// Start the server
+initializeServer().then(() => {
+  server.listen(PORT, HOST, () => {
+    console.log(`🌟 RideMapper server running on http://${HOST}:${PORT}`)
+    console.log(`🔌 WebSocket server ready for connections`)
+    console.log(`🗄️ Database: ${process.env.DATABASE_URL ? 'Connected' : 'Local'}`)
+  })
+})

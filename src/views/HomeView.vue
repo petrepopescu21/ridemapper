@@ -2,15 +2,35 @@
 import { useRouter } from 'vue-router'
 import { onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSessionStore } from '@/stores/session'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const sessionStore = useSessionStore()
 
-onMounted(() => {
+onMounted(async () => {
   // Check if manager is already authenticated
   authStore.checkAuth()
   if (authStore.isAuthenticated) {
-    router.push('/manager-dashboard')
+    // Set manager flag
+    sessionStore.isManager = true
+    
+    // Check for active session
+    try {
+      const recoveryResult = await sessionStore.recoverSession()
+      
+      if (recoveryResult.success && sessionStore.currentSession) {
+        // Active session found, go directly to map
+        router.push('/map')
+      } else {
+        // No active session, go to dashboard
+        router.push('/manager-dashboard')
+      }
+    } catch (recoveryError) {
+      console.log('Session recovery failed, proceeding to dashboard:', recoveryError)
+      // If recovery fails, go to dashboard
+      router.push('/manager-dashboard')
+    }
   }
 })
 

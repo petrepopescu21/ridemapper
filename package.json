@@ -10,6 +10,7 @@
     "npm": "9.x"
   },
   "scripts": {
+    "setup": "node scripts/setup-dev.cjs",
     "dev": "vite",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build && npm run copy:client",
@@ -26,10 +27,13 @@
     "dev:all": "concurrently \"npm run server:dev\" \"npm run dev\"",
     "test": "echo \"No tests yet\" && exit 0",
     "heroku:deploy": "bash scripts/deploy-heroku.sh",
-    "heroku:deploy:win": "scripts\\deploy-heroku.bat",
     "heroku:logs": "heroku logs --tail",
     "heroku:config": "heroku config",
-    "heroku:ps": "heroku ps"
+    "heroku:ps": "heroku ps",
+    "db:setup": "cd server && npm run db:generate && npm run db:push",
+    "db:reset": "cd server && npm run db:reset",
+    "db:migrate": "cd server && npm run db:migrate",
+    "db:generate": "cd server && npm run db:generate"
   },
   "keywords": [
     "vue",
@@ -44,6 +48,7 @@
   "license": "MIT",
   "dependencies": {
     "@mdi/font": "^7.4.47",
+    "@prisma/client": "^6.8.2",
     "@vueuse/core": "^10.7.0",
     "pinia": "^2.1.7",
     "socket.io-client": "^4.8.1",
@@ -57,6 +62,7 @@
     "@vitejs/plugin-vue": "^4.5.2",
     "@vue/tsconfig": "^0.7.0",
     "concurrently": "^8.2.2",
+    "prisma": "^6.8.2",
     "typescript": "^5.4.5",
     "vite": "^5.0.10",
     "vite-plugin-pwa": "^0.17.4",

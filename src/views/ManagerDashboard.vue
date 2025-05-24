@@ -11,6 +11,7 @@ const authStore = useAuthStore()
 const showCreateModal = ref(false)
 const isCreating = ref(false)
 const createError = ref('')
+const joinedExisting = ref(false)
 
 // Set manager flag when accessing dashboard
 sessionStore.isManager = true
@@ -27,10 +28,12 @@ const isSessionRecovered = computed(() => {
 async function createNewSession() {
   isCreating.value = true
   createError.value = ''
+  joinedExisting.value = false
   
   try {
     const result = await sessionStore.createSession(authStore.managerId!)
     if (result.success) {
+      joinedExisting.value = result.joinedExisting || false
       showCreateModal.value = true
     } else {
       createError.value = result.error || 'Failed to create session'
@@ -234,7 +237,7 @@ function copyPin() {
               
               <h2 class="text-h4 font-weight-bold mb-4">No Active Session</h2>
               <p class="text-h6 text-medium-emphasis mb-8">
-                Create a new session to start managing routes and tracking participants
+                Start or join a session to manage routes and track participants
               </p>
               
               <!-- Error Message -->
@@ -264,7 +267,7 @@ function copyPin() {
                 :disabled="isCreating"
                 class="text-none font-weight-bold px-8"
               >
-                {{ isCreating ? 'Creating Session...' : 'Create New Session' }}
+                {{ isCreating ? 'Connecting...' : 'Start Session' }}
               </v-btn>
             </v-card>
           </v-col>
@@ -276,7 +279,9 @@ function copyPin() {
     <v-dialog v-model="showCreateModal" max-width="500">
       <v-card>
         <v-card-title class="d-flex align-center justify-space-between">
-          <span class="text-h5 font-weight-bold">Session Created!</span>
+          <span class="text-h5 font-weight-bold">
+            {{ joinedExisting ? 'Joined Existing Session!' : 'Session Created!' }}
+          </span>
           <v-btn
             @click="showCreateModal = false"
             variant="text"
@@ -286,9 +291,20 @@ function copyPin() {
         </v-card-title>
 
         <v-card-text class="text-center pa-8">
-          <v-icon size="80" color="success" class="mb-6">mdi-check-circle</v-icon>
+          <v-icon 
+            size="80" 
+            :color="joinedExisting ? 'info' : 'success'" 
+            class="mb-6"
+          >
+            {{ joinedExisting ? 'mdi-account-plus' : 'mdi-check-circle' }}
+          </v-icon>
           
-          <p class="text-h6 mb-6">Share this PIN with participants:</p>
+          <p v-if="joinedExisting" class="text-h6 mb-6">
+            You've been added as manager to the active session:
+          </p>
+          <p v-else class="text-h6 mb-6">
+            Share this PIN with participants:
+          </p>
           
           <v-chip
             size="x-large"
@@ -310,6 +326,16 @@ function copyPin() {
           >
             Copy PIN
           </v-btn>
+
+          <v-alert
+            v-if="joinedExisting"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-4"
+          >
+            This session was created by {{ sessionStore.currentSession?.managerName }}
+          </v-alert>
         </v-card-text>
 
         <v-card-actions class="justify-center pb-6">
