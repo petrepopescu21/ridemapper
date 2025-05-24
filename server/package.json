@@ -3,6 +3,10 @@
     "version": "1.0.0",
     "description": "RideMapper WebSocket server for real-time location tracking and route management",
     "main": "dist/index.js",
+    "engines": {
+        "node": "22.x",
+        "npm": "10.x"
+    },
     "scripts": {
         "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",

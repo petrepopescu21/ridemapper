@@ -27,7 +27,22 @@ class RouteService {
   private initializeSocket() {
     if (this.socket?.connected) return
 
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3200'
+    // Automatically detect WebSocket URL based on current location
+    let wsUrl: string
+
+    if (import.meta.env.VITE_WS_URL) {
+      // Use explicit URL if provided (for development)
+      wsUrl = import.meta.env.VITE_WS_URL
+    } else if (typeof window !== 'undefined') {
+      // In browser: construct WebSocket URL from current location
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      wsUrl = `${protocol}//${host}`
+    } else {
+      // Fallback for development
+      wsUrl = 'ws://localhost:3200'
+    }
+
     console.log('RouteService: Attempting to connect to:', wsUrl)
 
     this.socket = io(wsUrl, {

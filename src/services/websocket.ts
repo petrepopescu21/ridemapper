@@ -87,8 +87,19 @@ class WebSocketService {
 
   connect(): Promise<Socket<ServerToClientEvents, ClientToServerEvents>> {
     return new Promise((resolve, reject) => {
-      // Get server URL from environment or default to localhost
-      const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3200'
+      // Automatically detect server URL based on current location
+      let serverUrl: string
+
+      if (import.meta.env.VITE_API_URL) {
+        // Use explicit URL if provided (for development)
+        serverUrl = import.meta.env.VITE_API_URL
+      } else if (typeof window !== 'undefined') {
+        // In browser: use current origin
+        serverUrl = window.location.origin
+      } else {
+        // Fallback for development
+        serverUrl = 'http://localhost:3200'
+      }
 
       console.log('Connecting to WebSocket server at:', serverUrl)
 

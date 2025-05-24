@@ -6,8 +6,8 @@
   "main": "server/dist/index.js",
   "type": "module",
   "engines": {
-    "node": "18.x",
-    "npm": "9.x"
+    "node": "22.x",
+    "npm": "10.x"
   },
   "scripts": {
     "setup": "node scripts/setup-dev.cjs",

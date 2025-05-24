@@ -563,7 +563,7 @@ setInterval(async () => {
 }, 60 * 60 * 1000)
 
 const PORT = Number(process.env.PORT) || 3200
-const HOST = process.env.HOST || '127.0.0.1'
+const HOST = process.env.HOST || '0.0.0.0'
 
 // Start the server
 initializeServer().then(() => {
