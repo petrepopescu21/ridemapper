@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { Request, Response, NextFunction } from 'express'
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import cors from 'cors'
@@ -47,7 +47,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client-dist')))
 
   // Handle client-side routing - serve index.html for non-API routes
-  app.get('*', (req, res, next) => {
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
     // Skip API routes and socket.io
     if (
       req.path.startsWith('/api') ||
@@ -66,7 +66,7 @@ const sessionManager = new SessionManager()
 const routeService = new RouteService()
 
 // Health check endpoint
-app.get('/health', async (req, res) => {
+app.get('/health', async (req: Request, res: Response) => {
   const dbHealth = await databaseService.healthCheck()
   res.json({
     status: dbHealth ? 'healthy' : 'unhealthy',
