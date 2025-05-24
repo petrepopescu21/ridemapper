@@ -100,16 +100,17 @@ app.get('/health', async (req: Request, res: Response) => {
 })
 
 // API endpoint for background sync location updates
-app.post('/api/location', async (req: Request, res: Response) => {
+app.post('/api/location', async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId, participantId, location, timestamp } = req.body
 
     // Validate required fields
     if (!sessionId || !participantId || !location || !location.lat || !location.lng) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required fields: sessionId, participantId, location.lat, location.lng',
       })
+      return
     }
 
     console.log('📍 API location update:', {
@@ -140,11 +141,13 @@ app.post('/api/location', async (req: Request, res: Response) => {
       })
 
       console.log('✅ API location update broadcasted to session', result.sessionId)
+      return
     } else {
       res.status(404).json({
         success: false,
         error: 'Participant or session not found',
       })
+      return
     }
   } catch (error) {
     console.error('❌ API location update error:', error)
@@ -152,6 +155,7 @@ app.post('/api/location', async (req: Request, res: Response) => {
       success: false,
       error: 'Internal server error',
     })
+    return
   }
 })
 
