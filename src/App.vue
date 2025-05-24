@@ -9,17 +9,6 @@ const sessionStore = useSessionStore()
 const authStore = useAuthStore()
 const isRecovering = ref(false)
 
-// Clean up session when user closes browser/tab
-function handleBeforeUnload() {
-  if (sessionStore.currentSession && sessionStore.currentParticipantId) {
-    // Only participants leave the session when closing browser
-    // Managers keep their sessions active for recovery
-    if (!sessionStore.isManager) {
-      sessionStore.leaveSession()
-    }
-  }
-}
-
 onMounted(async () => {
   // First, check if manager is already authenticated (restore from sessionStorage)
   authStore.checkAuth()
@@ -32,7 +21,7 @@ onMounted(async () => {
     
     if (result.success) {
       console.log('Session recovered successfully')
-      // Session recovered silently - no automatic navigation
+      router.push('/map')
     } else {
       console.log('No session to recover:', result.error)
     }
@@ -41,14 +30,6 @@ onMounted(async () => {
   } finally {
     isRecovering.value = false
   }
-
-  // Add beforeunload event listener
-  window.addEventListener('beforeunload', handleBeforeUnload)
-})
-
-onUnmounted(() => {
-  // Clean up event listener
-  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
