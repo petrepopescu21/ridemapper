@@ -397,13 +397,7 @@ export class SessionManager {
   }
 
   async getAnyActiveSession(): Promise<Session | null> {
-    // First check memory
-    const activeSessions = this.getAllActiveSessions()
-    if (activeSessions.length > 0) {
-      return activeSessions[0] // Return the first (and should be only) active session
-    }
-
-    // Check database
+    // Always check database first to get the most accurate state
     try {
       const sessionData = await this.prisma.session.findFirst({
         where: { isActive: true },
@@ -415,39 +409,56 @@ export class SessionManager {
 
       if (sessionData) {
         const session = await this.mapPrismaSessionToSession(sessionData)
-        // Cache it in memory
+        // Update memory cache with fresh data
         this.activeSessions.set(session.id, session)
         this.sessionsByPin.set(session.pin, session.id)
         return session
+      } else {
+        // No active sessions in database - clean up any stale memory cache
+        this.activeSessions.clear()
+        this.sessionsByPin.clear()
+        return null
       }
     } catch (error) {
       console.error('Error getting active session from database:', error)
+      return null
     }
-
-    return null
   }
 
   async validateManager(
     sessionId: string,
     managerId: string
   ): Promise<{ success: boolean; session?: Session; error?: string }> {
-    // In single-session mode, any manager can manage any active session
-    const session = this.activeSessions.get(sessionId)
+    // Always check database first to ensure session is actually active
+    try {
+      const dbSession = await this.prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          route: true,
+        },
+      })
 
-    if (!session) {
-      // Try to load from database
-      const dbSession = await this.getSessionFromDatabase(sessionId)
-      if (dbSession && dbSession.isActive) {
-        return { success: true, session: dbSession }
+      if (!dbSession) {
+        return { success: false, error: 'Session not found' }
       }
-      return { success: false, error: 'Session not found' }
-    }
 
-    if (!session.isActive) {
-      return { success: false, error: 'Session is not active' }
-    }
+      if (!dbSession.isActive) {
+        // Clean up any stale memory cache
+        this.activeSessions.delete(sessionId)
+        this.sessionsByPin.delete(dbSession.pin)
+        return { success: false, error: 'Session is not active' }
+      }
 
-    return { success: true, session }
+      // Session is active in database, ensure it's in memory cache
+      const session = await this.mapPrismaSessionToSession(dbSession)
+      this.activeSessions.set(session.id, session)
+      this.sessionsByPin.set(session.pin, session.id)
+
+      return { success: true, session }
+    } catch (error) {
+      console.error('Error validating manager session:', error)
+      return { success: false, error: 'Failed to validate session' }
+    }
   }
 
   private async getSessionFromDatabase(sessionId: string): Promise<Session | null> {
