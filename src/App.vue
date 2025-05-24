@@ -3,25 +3,46 @@ import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <RouterView />
+  <v-app>
+    <v-main>
+      <RouterView />
+    </v-main>
+  </v-app>
 </template>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Minimal global styles - Vuetify handles the layout */
+html, body {
+  height: 100%;
+  /* Prevent zoom on double-tap for mobile */
+  touch-action: manipulation;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  color: #333;
-  background: #f7fafc;
+/* Allow text selection in form inputs and content areas */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
-#app {
-  min-height: 100vh;
+/* PWA specific styles */
+@media (display-mode: standalone) {
+  body {
+    /* Additional spacing for devices with notches */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Custom gradient backgrounds for special components */
+.gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
 }
 </style>

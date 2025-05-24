@@ -56,235 +56,126 @@ function goBack() {
 </script>
 
 <template>
-  <div class="join-container">
-    <div class="join-card">
-      <button class="back-button" @click="goBack">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-        </svg>
-        Back
-      </button>
+  <v-container fluid class="fill-height gradient-accent">
+    <v-row justify="center" align="center" class="fill-height">
+      <v-col cols="12" sm="8" md="6" lg="4" xl="3">
+        <v-card elevation="12" class="mx-auto" max-width="400">
+          <v-card-text class="pa-8">
+            <!-- Icon -->
+            <v-row justify="center" class="mb-6">
+              <v-avatar size="80" class="gradient-accent">
+                <v-icon size="40" color="white">mdi-map-marker-account</v-icon>
+              </v-avatar>
+            </v-row>
 
-      <div class="join-header">
-        <div class="icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2c-4.97 0-9 4.03-9 9 0 5.52 7.5 11.67 7.78 11.9.14.12.31.18.47.18s.33-.06.47-.18C11.5 22.67 21 16.52 21 11c0-4.97-4.03-9-9-9zm0 2c3.86 0 7 3.14 7 7 0 3.73-4.84 8.44-7 10.31C9.84 19.44 5 14.73 5 11c0-3.86 3.14-7 7-7zm0 3c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/>
-          </svg>
-        </div>
-        <h1>Join Session</h1>
-        <p>Enter the session PIN to join the route</p>
-      </div>
+            <!-- Title -->
+            <h1 class="text-h4 font-weight-bold text-center mb-2">
+              Join Session
+            </h1>
+            <p class="text-body-1 text-center text-medium-emphasis mb-6">
+              Enter the session PIN to join the route
+            </p>
 
-      <form @submit.prevent="handleJoin" class="join-form">
-        <div class="form-group">
-          <label for="pin">Session PIN</label>
-          <input
-            id="pin"
-            v-model="pin"
-            type="text"
-            placeholder="Enter 6-digit PIN"
-            maxlength="6"
-            pattern="[0-9]{6}"
-            required
-            :disabled="isLoading"
-          />
-        </div>
+            <!-- Demo Note -->
+            <v-alert
+              type="info"
+              variant="tonal"
+              density="compact"
+              class="mb-6"
+              icon="mdi-information"
+            >
+              <template #text>
+                <strong>Demo Mode:</strong> Use PIN <strong>123456</strong> to try the app
+              </template>
+            </v-alert>
 
-        <div class="form-group">
-          <label for="name">Your Name</label>
-          <input
-            id="name"
-            v-model="name"
-            type="text"
-            placeholder="Enter your name"
-            required
-            :disabled="isLoading"
-          />
-        </div>
+            <!-- Join Form -->
+            <v-form @submit.prevent="handleJoin">
+              <v-text-field
+                v-model="pin"
+                label="Session PIN"
+                placeholder="000000"
+                maxlength="6"
+                :rules="[v => v.length === 6 || 'PIN must be 6 digits']"
+                :disabled="isLoading"
+                class="mb-4 text-center"
+                style="text-align: center; letter-spacing: 4px; font-weight: 600; font-size: 1.2rem;"
+                autofocus
+              />
 
-        <div v-if="error" class="error-message">
-          {{ error }}
-        </div>
+              <v-text-field
+                v-model="name"
+                label="Your Name"
+                placeholder="Enter your name"
+                :disabled="isLoading"
+                :rules="[v => !!v || 'Name is required']"
+                class="mb-4"
+              />
 
-        <button type="submit" class="submit-button" :disabled="isLoading">
-          <span v-if="!isLoading">Join Session</span>
-          <span v-else>Joining...</span>
-        </button>
-      </form>
+              <v-alert
+                v-if="error"
+                type="error"
+                density="compact"
+                class="mb-4"
+                closable
+                @click:close="error = ''"
+              >
+                {{ error }}
+              </v-alert>
 
-      <div class="info-section">
-        <p>Ask your route manager for the session PIN</p>
-      </div>
-    </div>
-  </div>
+              <v-btn
+                type="submit"
+                color="accent"
+                size="large"
+                :loading="isLoading"
+                :disabled="!pin || !name || pin.length !== 6"
+                block
+                class="text-none font-weight-bold mb-4"
+              >
+                {{ isLoading ? 'Joining...' : 'Join Session' }}
+              </v-btn>
+            </v-form>
+
+            <!-- Back Link -->
+            <v-row justify="center">
+              <v-btn
+                to="/"
+                variant="text"
+                color="accent"
+                prepend-icon="mdi-arrow-left"
+                class="text-none"
+              >
+                Back to Home
+              </v-btn>
+            </v-row>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <style scoped>
-.join-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.join-card {
-  background: white;
-  border-radius: 1rem;
-  padding: 2.5rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 400px;
-  position: relative;
-}
-
-.back-button {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: color 0.3s ease;
-}
-
-.back-button:hover {
-  color: #333;
-}
-
-.back-button svg {
-  width: 20px;
-  height: 20px;
-}
-
-.join-header {
+/* Custom styles for PIN input */
+:deep(.v-field__input) {
   text-align: center;
-  margin-bottom: 2rem;
-}
-
-.icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  border-radius: 50%;
-  color: white;
-}
-
-.icon svg {
-  width: 50px;
-  height: 50px;
-}
-
-.join-header h1 {
-  font-size: 1.75rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.join-header p {
-  color: #666;
-  font-size: 0.875rem;
-}
-
-.join-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
+  letter-spacing: 4px;
   font-weight: 600;
-  color: #333;
-  font-size: 0.875rem;
+  font-size: 1.2rem;
 }
 
-.form-group input {
-  padding: 0.75rem 1rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  background: #f7fafc;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #f093fb;
-  background: white;
-}
-
-.form-group input:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-#pin {
-  text-align: center;
-  font-size: 1.5rem;
-  letter-spacing: 0.5rem;
-  font-weight: 600;
-}
-
-.error-message {
-  background: #fee;
-  color: #c53030;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  text-align: center;
-}
-
-.submit-button {
-  padding: 0.875rem 2rem;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.submit-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #e878f2 0%, #f23355 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.submit-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.info-section {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid #e2e8f0;
-  text-align: center;
-}
-
-.info-section p {
-  color: #666;
-  font-size: 0.875rem;
+/* Responsive adjustments */
+@media (max-height: 600px) {
+  .pa-8 {
+    padding: 1rem !important;
+  }
+  
+  .mb-6 {
+    margin-bottom: 1rem !important;
+  }
+  
+  .mb-4 {
+    margin-bottom: 0.75rem !important;
+  }
 }
 </style> 

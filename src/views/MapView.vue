@@ -14,12 +14,13 @@ const messagesStore = useMessagesStore()
 // Map references
 const mapContainer = ref<HTMLDivElement>()
 const map = ref<google.maps.Map>()
-const directionsService = ref<google.maps.DirectionsService>()
 const directionsRenderer = ref<google.maps.DirectionsRenderer>()
+const routePolyline = ref<google.maps.Polyline>()
 
 // Markers
 const participantMarkers = ref<Map<string, google.maps.Marker>>(new Map())
 const routeMarkers = ref<google.maps.Marker[]>([])
+const managerMarker = ref<google.maps.Marker>()
 
 // Location tracking
 const { coords, error: geoError } = useGeolocation({ enableHighAccuracy: true })
@@ -30,7 +31,10 @@ const selectedParticipant = ref<string | null>(null)
 const showMessageModal = ref(false)
 const messageContent = ref('')
 const showRoutePanel = ref(false)
+const showParticipantsPanel = ref(false)
 const waypoints = ref<google.maps.LatLng[]>([])
+const locationError = ref<string | null>(null)
+const isLocationLoading = ref(false)
 
 // Session info display
 const sessionPin = computed(() => sessionStore.currentSession?.pin || '')
@@ -40,32 +44,216 @@ const participantName = computed(() => {
   return participant?.name || ''
 })
 
+// Computed for geolocation error display
+const showLocationError = computed({
+  get: () => !!geoError.value || !!locationError.value,
+  set: (value: boolean) => {
+    if (!value) {
+      locationError.value = null
+      // We can't actually clear the error from useGeolocation, but we can hide the snackbar
+      // The error will be reset when location is successfully obtained
+    }
+  }
+})
+
+const locationErrorMessage = computed(() => {
+  if (locationError.value) return locationError.value
+  if (geoError.value) return 'Location access denied. Please enable location services.'
+  return ''
+})
+
 // Initialize Google Maps
 function initMap() {
   if (!mapContainer.value) return
 
   map.value = new google.maps.Map(mapContainer.value, {
-    center: { lat: 40.7128, lng: -74.0060 }, // Default to New York
+    center: { lat: 40.7128, lng: -74.0060 }, // Default to New York (will be updated)
     zoom: 13,
     mapTypeControl: false,
     fullscreenControl: false,
     streetViewControl: false,
   })
 
-  directionsService.value = new google.maps.DirectionsService()
-  directionsRenderer.value = new google.maps.DirectionsRenderer({
-    map: map.value,
-    suppressMarkers: true,
-    polylineOptions: {
-      strokeColor: '#667eea',
-      strokeWeight: 5,
-      strokeOpacity: 0.8
-    }
-  })
-
   // Add click listener for route creation
   if (sessionStore.isManager) {
     map.value.addListener('click', handleMapClick)
+  }
+
+  // Wait for map to be ready, then center it
+  google.maps.event.addListenerOnce(map.value, 'idle', () => {
+    centerMapBasedOnRole()
+  })
+}
+
+// Center map based on whether user is manager or participant
+function centerMapBasedOnRole() {
+  console.log('Centering map for role:', sessionStore.isManager ? 'Manager' : 'Participant')
+  if (sessionStore.isManager) {
+    // Manager: Center to their current location
+    centerToUserLocation()
+  } else {
+    // Participant: Center to route or manager location
+    centerToRouteOrManagerLocation()
+  }
+}
+
+// Center map to current user's location
+function centerToUserLocation() {
+  console.log('Attempting to center to user location...')
+  isLocationLoading.value = true
+  locationError.value = null
+  
+  // First try to use the existing coords from useGeolocation hook
+  if (coords.value && 
+      coords.value.latitude && 
+      coords.value.longitude &&
+      isFinite(coords.value.latitude) && 
+      isFinite(coords.value.longitude) &&
+      coords.value.latitude !== 0 && 
+      coords.value.longitude !== 0) {
+    console.log('Using existing coordinates:', coords.value.latitude, coords.value.longitude)
+    const userLocation = {
+      lat: coords.value.latitude,
+      lng: coords.value.longitude
+    }
+    
+    if (map.value) {
+      map.value.setCenter(userLocation)
+      map.value.setZoom(15)
+      console.log('Map centered successfully to user location')
+      
+      // Add a marker for the user's location
+      new google.maps.Marker({
+        position: userLocation,
+        map: map.value,
+        title: sessionStore.isManager ? 'Your Location (Manager)' : 'Your Location',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: sessionStore.isManager ? '#667eea' : '#10b981',
+          fillOpacity: 1,
+          strokeColor: 'white',
+          strokeWeight: 3
+        }
+      })
+    }
+    isLocationLoading.value = false
+    return
+  }
+
+  console.log('No valid coordinates available, requesting fresh location...')
+  // Fallback to fresh geolocation request if coords not available yet
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('Fresh location obtained:', position.coords.latitude, position.coords.longitude)
+        const userLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        }
+        
+        if (map.value) {
+          map.value.setCenter(userLocation)
+          map.value.setZoom(15)
+          console.log('Map centered successfully to fresh location')
+          
+          // Add a marker for the user's location
+          new google.maps.Marker({
+            position: userLocation,
+            map: map.value,
+            title: sessionStore.isManager ? 'Your Location (Manager)' : 'Your Location',
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 10,
+              fillColor: sessionStore.isManager ? '#667eea' : '#10b981',
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 3
+            }
+          })
+        }
+        isLocationLoading.value = false
+        locationError.value = null
+      },
+      (error) => {
+        console.error('Geolocation error:', error.message)
+        isLocationLoading.value = false
+        
+        // Provide specific error messages based on error code
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            locationError.value = 'Location access denied. Please enable location in your browser settings and refresh the page.'
+            break
+          case error.POSITION_UNAVAILABLE:
+            locationError.value = 'Location information unavailable. Please check your GPS/network connection.'
+            break
+          case error.TIMEOUT:
+            locationError.value = 'Location request timed out. Click retry or enable location services.'
+            break
+          default:
+            locationError.value = 'Unable to get your location. Please try again or enable location services.'
+            break
+        }
+        
+        // For managers, this is more critical
+        if (sessionStore.isManager) {
+          console.log('Manager location centering failed - using default location')
+        }
+        // Fall back to default location or route centering
+        if (!sessionStore.isManager) {
+          centerToRouteOrManagerLocation()
+        }
+      },
+      {
+        enableHighAccuracy: false, // Try less accurate but faster positioning first
+        timeout: 15000, // Increased timeout
+        maximumAge: 300000 // 5 minutes cache
+      }
+    )
+  } else {
+    console.error('Geolocation not supported by browser')
+    isLocationLoading.value = false
+    locationError.value = 'Geolocation not supported by your browser.'
+  }
+}
+
+// Center map to show route or manager location for participants
+function centerToRouteOrManagerLocation() {
+  if (!map.value) return
+
+  // Check if there's an existing route
+  if (sessionStore.currentSession?.route && sessionStore.currentSession.route.length > 0) {
+    // Center to show the entire route
+    const bounds = new google.maps.LatLngBounds()
+    sessionStore.currentSession.route.forEach(point => {
+      bounds.extend(new google.maps.LatLng(point.lat, point.lng))
+    })
+    
+    map.value.fitBounds(bounds)
+    
+    // Ensure minimum zoom level
+    const listener = google.maps.event.addListener(map.value, 'idle', () => {
+      if (map.value!.getZoom()! > 16) {
+        map.value!.setZoom(16)
+      }
+      google.maps.event.removeListener(listener)
+    })
+  } else {
+    // Check if manager has a location
+    const managerParticipant = Array.from(sessionStore.currentSession?.participants.values() || [])
+      .find(p => p.name.includes('Manager') || p.id === sessionStore.currentSession?.createdBy)
+    
+    if (managerParticipant?.location) {
+      const managerLocation = {
+        lat: managerParticipant.location.lat,
+        lng: managerParticipant.location.lng
+      }
+      map.value.setCenter(managerLocation)
+      map.value.setZoom(14)
+    } else {
+      // Fall back to user's own location
+      centerToUserLocation()
+    }
   }
 }
 
@@ -105,30 +293,74 @@ function handleMapClick(event: google.maps.MapMouseEvent) {
   marker.addListener('dragend', updateRoute)
 }
 
-// Update route display
+// Update route display and center map for participants
 function updateRoute() {
   if (routeMarkers.value.length < 2) {
-    directionsRenderer.value?.setDirections({ routes: [] } as any)
+    // Clear any existing route display
+    if (directionsRenderer.value) {
+      directionsRenderer.value.setMap(null)
+    }
+    if (routePolyline.value) {
+      routePolyline.value.setMap(null)
+    }
     return
   }
 
-  const waypoints = routeMarkers.value.slice(1, -1).map(marker => ({
-    location: marker.getPosition()!,
-    stopover: true
-  }))
+  // Convert markers to LatLng for Routes API
+  const waypoints = routeMarkers.value.map(marker => marker.getPosition()!).filter(pos => pos !== null)
 
-  const request: google.maps.DirectionsRequest = {
-    origin: routeMarkers.value[0].getPosition()!,
-    destination: routeMarkers.value[routeMarkers.value.length - 1].getPosition()!,
-    waypoints,
-    travelMode: google.maps.TravelMode.DRIVING
-  }
+  callRoutesAPI(waypoints)
+    .then(data => {
+      if (data.routes && data.routes.length > 0) {
+        // Success with Routes API - decode the polyline
+        const route = data.routes[0]
+        const encodedPolyline = route.polyline.encodedPolyline
+        
+        // Decode the polyline using Google Maps utility
+        const decodedPath = google.maps.geometry.encoding.decodePath(encodedPolyline)
+        
+        // Clear existing polyline
+        if (routePolyline.value) {
+          routePolyline.value.setMap(null)
+        }
+        
+        // Create new polyline from decoded path
+        routePolyline.value = new google.maps.Polyline({
+          path: decodedPath,
+          geodesic: true,
+          strokeColor: '#667eea',
+          strokeOpacity: 0.8,
+          strokeWeight: 4
+        })
 
-  directionsService.value?.route(request, (result, status) => {
-    if (status === 'OK' && result) {
-      directionsRenderer.value?.setDirections(result)
-      
-      // Save route to store
+        routePolyline.value.setMap(map.value || null)
+        
+        // Save route to store
+        const routePoints = routeMarkers.value.map((marker, index) => {
+          const pos = marker.getPosition()!
+          return {
+            lat: pos.lat(),
+            lng: pos.lng(),
+            type: index === 0 ? 'start' : index === routeMarkers.value.length - 1 ? 'end' : 'waypoint'
+          } as const
+        })
+        sessionStore.updateRoute(routePoints)
+
+        // If this is a participant and route was just created/updated, center to route
+        if (!sessionStore.isManager) {
+          setTimeout(() => {
+            centerToRouteOrManagerLocation()
+          }, 500) // Small delay to ensure route is rendered
+        }
+        
+        console.log('Route updated using Routes API')
+      } else {
+        throw new Error('No routes returned from Routes API')
+      }
+    })
+    .catch(error => {
+      console.warn('Routes API failed in updateRoute, using fallback:', error)
+      // Fallback - save the waypoints as a simple route
       const routePoints = routeMarkers.value.map((marker, index) => {
         const pos = marker.getPosition()!
         return {
@@ -138,15 +370,41 @@ function updateRoute() {
         } as const
       })
       sessionStore.updateRoute(routePoints)
-    }
-  })
+      
+      // Display simple polyline fallback
+      const path = waypoints
+      if (routePolyline.value) {
+        routePolyline.value.setMap(null)
+      }
+      
+      routePolyline.value = new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: '#667eea',
+        strokeOpacity: 0.8,
+        strokeWeight: 4
+      })
+
+      routePolyline.value.setMap(map.value || null)
+    })
 }
 
 // Clear route
 function clearRoute() {
   routeMarkers.value.forEach(marker => marker.setMap(null))
   routeMarkers.value = []
-  directionsRenderer.value?.setDirections({ routes: [] } as any)
+  
+  // Clear directions renderer
+  if (directionsRenderer.value) {
+    directionsRenderer.value.setMap(null)
+  }
+  
+  // Clear fallback polyline
+  if (routePolyline.value) {
+    routePolyline.value.setMap(null)
+    routePolyline.value = undefined
+  }
+  
   sessionStore.updateRoute([])
 }
 
@@ -212,7 +470,12 @@ function updateParticipantMarkers() {
 
 // Send location update
 function sendLocationUpdate() {
-  if (coords.value && sessionStore.currentParticipantId) {
+  if (coords.value && 
+      sessionStore.currentParticipantId &&
+      isFinite(coords.value.latitude) && 
+      isFinite(coords.value.longitude) &&
+      coords.value.latitude !== 0 && 
+      coords.value.longitude !== 0) {
     sessionStore.updateParticipantLocation(
       sessionStore.currentParticipantId,
       coords.value.latitude,
@@ -250,7 +513,8 @@ function loadGoogleMapsScript() {
     }
 
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places`
+    // Remove directions library since we'll use Routes API directly
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=geometry&v=weekly`
     script.async = true
     script.defer = true
     script.onload = () => resolve(true)
@@ -289,506 +553,586 @@ onUnmounted(() => {
 watch(coords, () => {
   sendLocationUpdate()
 })
+
+// Watch for initial location availability (for manager centering)
+watch(coords, (newCoords) => {
+  if (newCoords && 
+      newCoords.latitude && 
+      newCoords.longitude &&
+      isFinite(newCoords.latitude) && 
+      isFinite(newCoords.longitude) &&
+      newCoords.latitude !== 0 && 
+      newCoords.longitude !== 0 &&
+      sessionStore.isManager && 
+      map.value) {
+    // Check if map is still at default location (hasn't been centered yet)
+    const currentCenter = map.value.getCenter()
+    if (currentCenter && 
+        Math.abs(currentCenter.lat() - 40.7128) < 0.1 && 
+        Math.abs(currentCenter.lng() - (-74.0060)) < 0.1) {
+      // Still at default location, center to user location
+      console.log('Auto-centering map as valid coordinates became available')
+      centerToUserLocation()
+    }
+  }
+}, { immediate: true })
+
+// Watch for route changes (for participants to auto-center when manager updates route)
+watch(() => sessionStore.currentSession?.route, (newRoute) => {
+  if (!sessionStore.isManager && newRoute && newRoute.length > 0) {
+    // Participant: re-center to updated route
+    setTimeout(() => {
+      centerToRouteOrManagerLocation()
+    }, 1000) // Give time for route to be rendered
+  }
+}, { deep: true })
+
+// Call the new Routes API
+async function callRoutesAPI(waypoints: google.maps.LatLng[]) {
+  const origin = waypoints[0]
+  const destination = waypoints[waypoints.length - 1]
+  const intermediates = waypoints.slice(1, -1)
+
+  const requestBody = {
+    origin: {
+      location: {
+        latLng: {
+          latitude: origin.lat(),
+          longitude: origin.lng()
+        }
+      }
+    },
+    destination: {
+      location: {
+        latLng: {
+          latitude: destination.lat(),
+          longitude: destination.lng()
+        }
+      }
+    },
+    intermediates: intermediates.map(point => ({
+      location: {
+        latLng: {
+          latitude: point.lat(),
+          longitude: point.lng()
+        }
+      }
+    })),
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_AWARE',
+    computeAlternativeRoutes: false,
+    routeModifiers: {
+      avoidTolls: false,
+      avoidHighways: false,
+      avoidFerries: false
+    },
+    languageCode: 'en-US',
+    units: 'IMPERIAL'
+  }
+
+  try {
+    const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    if (!response.ok) {
+      throw new Error(`Routes API failed: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('Routes API error:', error)
+    throw error
+  }
+}
+
+// Display route on map using Routes API
+function displayRoute() {
+  if (!map.value || !sessionStore.currentSession?.route?.length) return
+
+  // Clear existing route
+  if (directionsRenderer.value) {
+    directionsRenderer.value.setMap(null)
+  }
+  if (routePolyline.value) {
+    routePolyline.value.setMap(null)
+  }
+  // Clear existing markers
+  routeMarkers.value.forEach(marker => marker.setMap(null))
+  routeMarkers.value = []
+
+  // Try to use Routes API first, fallback to simple polyline
+  const waypoints = sessionStore.currentSession.route.map(wp => 
+    new google.maps.LatLng(wp.lat, wp.lng)
+  )
+
+  callRoutesAPI(waypoints)
+    .then(data => {
+      if (data.routes && data.routes.length > 0) {
+        // Success with Routes API - decode the polyline
+        const route = data.routes[0]
+        const encodedPolyline = route.polyline.encodedPolyline
+        
+        // Decode the polyline using Google Maps utility
+        const decodedPath = google.maps.geometry.encoding.decodePath(encodedPolyline)
+        
+        // Create polyline from decoded path
+        routePolyline.value = new google.maps.Polyline({
+          path: decodedPath,
+          geodesic: true,
+          strokeColor: '#667eea',
+          strokeOpacity: 0.8,
+          strokeWeight: 4
+        })
+
+        routePolyline.value.setMap(map.value || null)
+
+        // Add waypoint markers
+        addWaypointMarkers(waypoints)
+        
+        console.log('Route displayed using Routes API')
+      } else {
+        throw new Error('No routes returned from Routes API')
+      }
+    })
+    .catch(error => {
+      // Fallback: Draw simple polyline connecting waypoints
+      console.warn('Routes API failed, using fallback polyline:', error)
+      displayFallbackRoute()
+    })
+}
+
+// Add markers for waypoints
+function addWaypointMarkers(waypoints: google.maps.LatLng[]) {
+  waypoints.forEach((waypoint, index) => {
+    if (!map.value) return
+    
+    const marker = new google.maps.Marker({
+      position: waypoint,
+      map: map.value,
+      title: `Waypoint ${index + 1}`,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: index === 0 ? '#4CAF50' : 
+                   index === waypoints.length - 1 ? '#F44336' : '#667eea',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2
+      }
+    })
+    routeMarkers.value.push(marker)
+  })
+}
+
+// Fallback route display without Routes API
+function displayFallbackRoute() {
+  if (!map.value || !sessionStore.currentSession?.route?.length) return
+
+  const path = sessionStore.currentSession.route.map(wp => 
+    new google.maps.LatLng(wp.lat, wp.lng)
+  )
+
+  routePolyline.value = new google.maps.Polyline({
+    path: path,
+    geodesic: true,
+    strokeColor: '#667eea',
+    strokeOpacity: 0.8,
+    strokeWeight: 4
+  })
+
+  routePolyline.value.setMap(map.value || null)
+
+  // Add markers for waypoints
+  sessionStore.currentSession.route.forEach((waypoint, index) => {
+    if (!map.value || !sessionStore.currentSession) return
+    
+    const marker = new google.maps.Marker({
+      position: { lat: waypoint.lat, lng: waypoint.lng },
+      map: map.value,
+      title: `Waypoint ${index + 1}`,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: index === 0 ? '#4CAF50' : 
+                   index === sessionStore.currentSession.route.length - 1 ? '#F44336' : '#667eea',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2
+      }
+    })
+    routeMarkers.value.push(marker)
+  })
+}
 </script>
 
 <template>
-  <div class="map-view">
-    <!-- Header -->
-    <header class="map-header">
-      <div class="header-left">
-        <h1>{{ sessionStore.isManager ? 'Route Manager' : 'Participant' }} View</h1>
-        <div class="session-info">
-          <span class="pin-badge">PIN: {{ sessionPin }}</span>
-          <span v-if="!sessionStore.isManager" class="name-badge">{{ participantName }}</span>
-        </div>
-      </div>
-      <button @click="leaveSession" class="leave-button">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-        </svg>
-        {{ sessionStore.isManager ? 'End Session' : 'Leave' }}
-      </button>
-    </header>
-
-    <!-- Map Container -->
-    <div ref="mapContainer" class="map-container"></div>
-
-    <!-- Manager Controls -->
-    <div v-if="sessionStore.isManager" class="manager-controls">
-      <button @click="showRoutePanel = !showRoutePanel" class="control-button">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.39.39-1.02 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
-        </svg>
-        Route Tools
-      </button>
+  <v-app>
+    <!-- App Bar -->
+    <v-app-bar color="primary" density="compact" elevation="4">
+      <template #prepend>
+        <v-icon>mdi-map</v-icon>
+      </template>
       
-      <div v-if="showRoutePanel" class="route-panel">
-        <h3>Route Management</h3>
-        <p>Click on the map to add waypoints</p>
-        <div class="route-actions">
-          <button @click="clearRoute" class="action-btn danger">Clear Route</button>
-        </div>
-        <div class="route-points">
-          <div v-for="(marker, index) in routeMarkers" :key="index" class="route-point">
-            <span>{{ index === 0 ? 'Start' : index === routeMarkers.length - 1 ? 'End' : `Waypoint ${index}` }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+      <v-app-bar-title class="text-body-1">
+        {{ sessionStore.isManager ? 'Route Manager' : 'Participant' }} View
+      </v-app-bar-title>
 
-    <!-- Participants Panel -->
-    <div class="participants-panel">
-      <h3>Active Participants ({{ sessionStore.activeParticipants.length }})</h3>
-      <div class="participants-list">
-        <div
-          v-for="participant in sessionStore.activeParticipants"
-          :key="participant.id"
-          class="participant-item"
-          :class="{ selected: selectedParticipant === participant.id }"
-          @click="sessionStore.isManager && (selectedParticipant = participant.id)"
-        >
-          <div class="participant-info">
-            <span class="participant-name">{{ participant.name }}</span>
-            <span v-if="participant.location" class="participant-status">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              Live
-            </span>
-          </div>
-          <div v-if="sessionStore.isManager && messagesStore.unreadCount.get(participant.id)" class="unread-badge">
-            {{ messagesStore.unreadCount.get(participant.id) }}
-          </div>
+      <template #append>
+        <!-- Session Info -->
+        <div class="d-flex align-center mr-4">
+          <v-chip size="small" color="white" variant="outlined" class="mr-2">
+            PIN: {{ sessionPin }}
+          </v-chip>
+          <v-chip 
+            v-if="!sessionStore.isManager" 
+            size="small" 
+            color="white" 
+            variant="outlined"
+          >
+            {{ participantName }}
+          </v-chip>
         </div>
+
+        <!-- Leave Button -->
+        <v-btn
+          @click="leaveSession"
+          color="error"
+          variant="outlined"
+          prepend-icon="mdi-exit-to-app"
+          size="small"
+          class="text-none"
+        >
+          {{ sessionStore.isManager ? 'End Session' : 'Leave' }}
+        </v-btn>
+      </template>
+    </v-app-bar>
+
+    <!-- Main Content -->
+    <v-main class="fill-height">
+      <!-- Map Container -->
+      <div ref="mapContainer" class="map-container"></div>
+
+      <!-- Floating Action Buttons for Mobile -->
+      <div class="floating-controls">
+        <!-- Center to My Location FAB (Manager Only) -->
+        <v-tooltip location="left">
+          <template #activator="{ props }">
+            <v-btn
+              v-if="sessionStore.isManager"
+              @click="centerToUserLocation"
+              color="success"
+              :icon="isLocationLoading ? 'mdi-loading' : 'mdi-crosshairs-gps'"
+              size="large"
+              elevation="4"
+              class="mb-2"
+              :class="{ 'rotating': isLocationLoading }"
+              :disabled="isLocationLoading"
+              v-bind="props"
+            />
+          </template>
+          <span>{{ isLocationLoading ? 'Getting Location...' : 'Center to My Location' }}</span>
+        </v-tooltip>
+
+        <!-- Re-center to Route FAB (Participants Only) -->
+        <v-tooltip location="left">
+          <template #activator="{ props }">
+            <v-btn
+              v-if="!sessionStore.isManager && sessionStore.currentSession?.route?.length"
+              @click="centerToRouteOrManagerLocation"
+              color="info"
+              icon="mdi-crosshairs-gps"
+              size="large"
+              elevation="4"
+              class="mb-2"
+              v-bind="props"
+            />
+          </template>
+          <span>Center to Route</span>
+        </v-tooltip>
+
+        <!-- Participants FAB -->
+        <v-btn
+          @click="showParticipantsPanel = !showParticipantsPanel"
+          color="primary"
+          icon="mdi-account-group"
+          size="large"
+          elevation="4"
+          class="mb-2"
+        />
+
+        <!-- Route Tools FAB (Manager Only) -->
+        <v-btn
+          v-if="sessionStore.isManager"
+          @click="showRoutePanel = !showRoutePanel"
+          color="secondary"
+          icon="mdi-routes"
+          size="large"
+          elevation="4"
+        />
       </div>
-    </div>
+
+      <!-- Route Panel -->
+      <v-navigation-drawer
+        v-if="sessionStore.isManager"
+        v-model="showRoutePanel"
+        location="left"
+        temporary
+        width="320"
+      >
+        <v-card flat>
+          <v-card-title class="d-flex align-center">
+            <v-icon class="mr-2">mdi-routes</v-icon>
+            Route Management
+          </v-card-title>
+          
+          <v-card-text>
+            <v-alert type="info" density="compact" class="mb-4">
+              Click on the map to add waypoints. Right-click markers to remove them.
+            </v-alert>
+
+            <v-btn
+              @click="clearRoute"
+              color="error"
+              variant="outlined"
+              prepend-icon="mdi-delete"
+              block
+              class="text-none mb-4"
+            >
+              Clear Route
+            </v-btn>
+
+            <v-card v-if="routeMarkers.length > 0" variant="tonal">
+              <v-card-title class="text-subtitle-1">Route Points</v-card-title>
+              <v-card-text>
+                <v-chip
+                  v-for="(marker, index) in routeMarkers"
+                  :key="index"
+                  size="small"
+                  class="ma-1"
+                  :color="index === 0 ? 'success' : index === routeMarkers.length - 1 ? 'error' : 'warning'"
+                >
+                  {{ index === 0 ? 'Start' : index === routeMarkers.length - 1 ? 'End' : `Point ${index}` }}
+                </v-chip>
+              </v-card-text>
+            </v-card>
+          </v-card-text>
+        </v-card>
+      </v-navigation-drawer>
+
+      <!-- Participants Panel -->
+      <v-navigation-drawer
+        v-model="showParticipantsPanel"
+        location="right"
+        temporary
+        width="320"
+      >
+        <v-card flat>
+          <v-card-title class="d-flex align-center">
+            <v-icon class="mr-2">mdi-account-group</v-icon>
+            Participants ({{ sessionStore.activeParticipants.length }})
+          </v-card-title>
+          
+          <v-card-text>
+            <v-list>
+              <v-list-item
+                v-for="participant in sessionStore.activeParticipants"
+                :key="participant.id"
+                :prepend-avatar="`https://ui-avatars.com/api/?name=${participant.name}&background=667eea&color=fff`"
+                @click="sessionStore.isManager && (selectedParticipant = participant.id, showMessageModal = true)"
+                :class="{ 'cursor-pointer': sessionStore.isManager }"
+              >
+                <v-list-item-title>{{ participant.name }}</v-list-item-title>
+                <v-list-item-subtitle>
+                  <v-chip
+                    v-if="participant.location"
+                    size="small"
+                    color="success"
+                    variant="text"
+                    prepend-icon="mdi-map-marker"
+                  >
+                    Live Location
+                  </v-chip>
+                  <v-chip
+                    v-else
+                    size="small"
+                    color="warning"
+                    variant="text"
+                    prepend-icon="mdi-map-marker-off"
+                  >
+                    No Location
+                  </v-chip>
+                </v-list-item-subtitle>
+
+                <!-- Unread Messages Badge -->
+                <template #append>
+                  <v-badge
+                    v-if="sessionStore.isManager && messagesStore.unreadCount.get(participant.id)"
+                    :content="messagesStore.unreadCount.get(participant.id)"
+                    color="error"
+                  >
+                    <v-icon>mdi-message</v-icon>
+                  </v-badge>
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
+      </v-navigation-drawer>
+    </v-main>
 
     <!-- Message Modal -->
-    <Teleport to="body">
-      <div v-if="showMessageModal" class="modal-overlay" @click.self="showMessageModal = false">
-        <div class="message-modal">
-          <div class="modal-header">
-            <h3>Send Message</h3>
-            <button @click="showMessageModal = false" class="close-button">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-              </svg>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div v-if="selectedParticipant" class="recipient">
-              To: {{ sessionStore.currentSession?.participants.get(selectedParticipant)?.name }}
-            </div>
-            <textarea
-              v-model="messageContent"
-              placeholder="Type your message..."
-              rows="4"
-              class="message-input"
-            ></textarea>
-          </div>
-          <div class="modal-footer">
-            <button @click="sendMessage" class="send-button" :disabled="!messageContent.trim()">
-              Send Message
-            </button>
+    <v-dialog v-model="showMessageModal" max-width="500">
+      <v-card>
+        <v-card-title class="d-flex align-center justify-space-between">
+          <span>Send Message</span>
+          <v-btn
+            @click="showMessageModal = false"
+            variant="text"
+            icon="mdi-close"
+            size="small"
+          />
+        </v-card-title>
+
+        <v-card-text>
+          <v-alert
+            v-if="selectedParticipant"
+            type="info"
+            density="compact"
+            class="mb-4"
+          >
+            To: {{ sessionStore.currentSession?.participants.get(selectedParticipant)?.name }}
+          </v-alert>
+
+          <v-textarea
+            v-model="messageContent"
+            label="Message"
+            placeholder="Type your message..."
+            rows="4"
+            variant="outlined"
+            counter
+          />
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            @click="showMessageModal = false"
+            variant="text"
+            class="text-none"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            @click="sendMessage"
+            color="primary"
+            :disabled="!messageContent.trim()"
+            class="text-none"
+          >
+            Send Message
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Location Error Snackbar -->
+    <v-snackbar
+      v-model="showLocationError"
+      color="error"
+      timeout="-1"
+      location="bottom"
+      multi-line
+    >
+      <div class="d-flex align-center">
+        <v-icon class="mr-2">mdi-map-marker-off</v-icon>
+        <div>
+          <div class="font-weight-medium">{{ locationErrorMessage }}</div>
+          <div v-if="locationError && locationError.includes('denied')" class="text-caption mt-1">
+            Click the location icon in your browser's address bar to enable location access.
           </div>
         </div>
       </div>
-    </Teleport>
-
-    <!-- Location Error -->
-    <div v-if="geoError" class="location-error">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-      </svg>
-      Location access denied. Please enable location services.
-    </div>
-  </div>
+      
+      <template #actions>
+        <v-btn
+          v-if="locationError && (locationError.includes('timed out') || locationError.includes('unavailable'))"
+          variant="text"
+          color="white"
+          size="small"
+          @click="centerToUserLocation"
+          :disabled="isLocationLoading"
+        >
+          Retry
+        </v-btn>
+        <v-btn 
+          variant="text" 
+          color="white"
+          size="small"
+          @click="showLocationError = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
+  </v-app>
 </template>
 
 <style scoped>
-.map-view {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.map-header {
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 1rem 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 10;
-}
-
-.header-left h1 {
-  font-size: 1.25rem;
-  color: #333;
-  margin-bottom: 0.25rem;
-}
-
-.session-info {
-  display: flex;
-  gap: 1rem;
-}
-
-.pin-badge, .name-badge {
-  background: #f7fafc;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #667eea;
-}
-
-.leave-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #fee;
-  color: #c53030;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.leave-button:hover {
-  background: #fed7d7;
-}
-
-.leave-button svg {
-  width: 20px;
-  height: 20px;
-}
-
 .map-container {
-  flex: 1;
-  position: relative;
-}
-
-.manager-controls {
-  position: absolute;
-  top: 80px;
-  left: 20px;
-  z-index: 5;
-}
-
-.control-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: white;
-  border: none;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.control-button:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.control-button svg {
-  width: 20px;
-  height: 20px;
-  color: #667eea;
-}
-
-.route-panel {
-  margin-top: 0.5rem;
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  min-width: 250px;
-}
-
-.route-panel h3 {
-  font-size: 1.125rem;
-  margin-bottom: 0.5rem;
-  color: #333;
-}
-
-.route-panel p {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 1rem;
-}
-
-.route-actions {
-  margin-bottom: 1rem;
-}
-
-.action-btn {
-  width: 100%;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.action-btn.danger {
-  background: #fee;
-  color: #c53030;
-}
-
-.action-btn.danger:hover {
-  background: #fed7d7;
-}
-
-.route-points {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.route-point {
-  padding: 0.5rem;
-  background: #f7fafc;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  color: #333;
-}
-
-.participants-panel {
-  position: absolute;
-  top: 80px;
-  right: 20px;
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  max-width: 300px;
-  max-height: 400px;
-  overflow-y: auto;
-  z-index: 5;
-}
-
-.participants-panel h3 {
-  font-size: 1.125rem;
-  margin-bottom: 1rem;
-  color: #333;
-}
-
-.participants-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.participant-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background: #f7fafc;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.participant-item:hover {
-  background: #e2e8f0;
-}
-
-.participant-item.selected {
-  background: #eef2ff;
-  border: 1px solid #667eea;
-}
-
-.participant-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.participant-name {
-  font-weight: 600;
-  color: #333;
-}
-
-.participant-status {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #10b981;
-}
-
-.participant-status svg {
-  width: 12px;
-  height: 12px;
-}
-
-.unread-badge {
-  background: #ef4444;
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.125rem 0.5rem;
-  border-radius: 1rem;
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.message-modal {
-  background: white;
-  border-radius: 0.5rem;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.modal-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  font-size: 1.25rem;
-  color: #333;
-}
-
-.close-button {
-  padding: 0.5rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  transition: color 0.3s ease;
-}
-
-.close-button:hover {
-  color: #333;
-}
-
-.close-button svg {
-  width: 24px;
-  height: 24px;
-}
-
-.modal-body {
-  padding: 1.5rem;
-}
-
-.recipient {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 1rem;
-}
-
-.message-input {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 0.375rem;
-  resize: vertical;
-  font-family: inherit;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
 }
 
-.message-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.modal-footer {
-  padding: 1.5rem;
-  border-top: 1px solid #e2e8f0;
+.floating-controls {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  z-index: 6;
 }
 
-.send-button {
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 600;
+.cursor-pointer {
   cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.send-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5a67d8 0%, #68428e 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+/* Loading animation */
+.rotating {
+  animation: rotate 1s linear infinite;
 }
 
-.send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.location-error {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #fee;
-  color: #c53030;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.location-error svg {
-  width: 20px;
-  height: 20px;
-}
-
-@media (max-width: 768px) {
-  .map-header {
-    padding: 0.75rem 1rem;
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
   }
-
-  .header-left h1 {
-    font-size: 1rem;
+  to {
+    transform: rotate(360deg);
   }
+}
 
-  .manager-controls,
-  .participants-panel {
-    position: fixed;
-    bottom: 20px;
-    top: auto;
+/* Mobile responsive adjustments */
+@media (max-width: 960px) {
+  .floating-controls {
+    bottom: 16px;
+    right: 16px;
   }
+}
 
-  .participants-panel {
-    left: 20px;
-    right: 20px;
-    max-width: none;
-    max-height: 200px;
+@media (max-width: 600px) {
+  .v-app-bar-title {
+    font-size: 0.875rem !important;
+  }
+  
+  .floating-controls {
+    bottom: 80px;
+    right: 16px;
   }
 }
 </style> 
