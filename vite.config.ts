@@ -36,6 +36,14 @@ export default defineConfig({
               cacheName: 'health-check-cache',
             },
           },
+          {
+            urlPattern: /^https:\/\/.*\.herokuapp\.com\/api\//,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 10,
+            },
+          },
         ],
         skipWaiting: true,
         clientsClaim: true,
