@@ -1,0 +1,53 @@
+{
+    "name": "ridemapper",
+    "description": "Real-time location tracking and route management application",
+    "keywords": [
+        "vue",
+        "typescript",
+        "socket.io",
+        "real-time",
+        "maps"
+    ],
+    "website": "https://github.com/your-username/ridemapper",
+    "repository": "https://github.com/your-username/ridemapper",
+    "logo": "https://your-logo-url.com/logo.png",
+    "success_url": "/",
+    "stack": "heroku-22",
+    "buildpacks": [
+        {
+            "url": "heroku/nodejs"
+        }
+    ],
+    "formation": {
+        "web": {
+            "quantity": 1,
+            "size": "basic"
+        }
+    },
+    "addons": [],
+    "env": {
+        "NODE_ENV": {
+            "description": "Node.js environment",
+            "value": "production"
+        },
+        "VITE_GOOGLE_MAPS_API_KEY": {
+            "description": "Google Maps API key for map functionality",
+            "required": true
+        },
+        "CLIENT_URL": {
+            "description": "Client URL for CORS (leave empty to use same origin)",
+            "required": false
+        }
+    },
+    "scripts": {
+        "postdeploy": "echo 'Deploy completed successfully!'"
+    },
+    "environments": {
+        "test": {
+            "addons": [],
+            "scripts": {
+                "test": "npm test"
+            }
+        }
+    }
+}

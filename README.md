@@ -1,184 +1,179 @@
-# RideMapper - Route Management PWA
+# RideMapper 🗺️
 
-A Progressive Web App for real-time route management and participant tracking. Allows route managers to create routes and track participants' live locations, with messaging capabilities.
+A real-time location tracking and route management application built with Vue.js, Socket.io, and Google Maps.
 
 ## Features
 
-- **Two User Personas:**
-  - **Route Manager**: Create routes, monitor participants, send messages
-  - **Participant**: Join sessions, share live location
+- 📍 **Real-time Location Tracking**: Live participant positioning with WebSocket updates
+- 🗺️ **Interactive Route Planning**: Create and share routes using Google Maps Routes API
+- 👥 **Session Management**: PIN-based joining with manager controls
+- 💬 **Real-time Messaging**: Manager-to-participant communication
+- 📱 **Progressive Web App**: Mobile-first responsive design with Vuetify
+- 🔒 **Secure**: TypeScript, CORS protection, and input validation
 
-- **Route Management:**
-  - Interactive route creation using Google Maps
-  - Add start, end, and waypoint markers
-  - Visual route display with directions
+## Technology Stack
 
-- **Live Location Tracking:**
-  - Real-time participant location updates
-  - Visual markers on map for all participants
-  - Location status indicators
+- **Frontend**: Vue.js 3, TypeScript, Vuetify, Pinia
+- **Backend**: Node.js, Express, Socket.io, TypeScript
+- **Maps**: Google Maps JavaScript API + Routes API
+- **Deployment**: Docker, Kubernetes, Heroku
+- **Development**: Vite, Hot Module Replacement, Concurrently
 
-- **Messaging System:**
-  - Managers can send messages to individual participants
-  - Click on participant markers to message
+## Quick Start
 
-- **Session Management:**
-  - PIN-based session access for participants
-  - Password-protected manager access
-  - Session persistence
+### Local Development
 
-- **PWA Features:**
-  - Install on mobile devices
-  - Offline capability (with service worker)
-  - Responsive design
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/ridemapper.git
+   cd ridemapper
+   ```
 
-## Tech Stack
+2. **Install dependencies**
+   ```bash
+   npm install
+   npm run install:server
+   ```
 
-- **Frontend**: Vue 3 with TypeScript
-- **State Management**: Pinia
-- **Routing**: Vue Router
-- **Maps**: Google Maps JavaScript API
-- **PWA**: Vite PWA Plugin
-- **Styling**: Scoped CSS with modern gradients
+3. **Set up environment variables**
+   ```bash
+   cp env.example .env
+   # Edit .env and add your Google Maps API key
+   ```
 
-## Setup Instructions
+4. **Start development servers**
+   ```bash
+   npm run dev:all
+   ```
+
+   This starts both the client (http://localhost:5173) and server (http://localhost:3001)
+
+### Docker Development
+
+```bash
+# Development with hot reload
+npm run docker:dev
+
+# Production build
+npm run docker:up
+```
+
+## Heroku Deployment 🚀
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- Google Maps API Key
+1. **Heroku CLI** installed
+2. **Google Maps API Key** with the following APIs enabled:
+   - Maps JavaScript API
+   - Routes API
+   - Geocoding API (optional)
 
-### Installation
+### Deploy to Heroku
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd ridemapper
-```
+1. **Create a Heroku app**
+   ```bash
+   heroku create your-app-name
+   ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+2. **Set environment variables**
+   ```bash
+   heroku config:set NODE_ENV=production
+   heroku config:set VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+   ```
 
-3. Create a `.env` file in the root directory:
-```env
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
-```
+3. **Deploy**
+   ```bash
+   git push heroku main
+   ```
 
-4. Update the Google Maps API key in `src/views/MapView.vue`:
-   - Replace `YOUR_GOOGLE_MAPS_API_KEY` with `${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+4. **Open your app**
+   ```bash
+   heroku open
+   ```
 
-### Development
+### One-Click Deploy
 
-Run the development server:
-```bash
-npm run dev
-```
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/your-username/ridemapper)
 
-The app will be available at `http://localhost:5173`
+### Environment Variables
 
-### Building for Production
-
-```bash
-npm run build
-```
-
-The built files will be in the `dist` directory.
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps API key | ✅ Yes |
+| `NODE_ENV` | Environment (production/development) | ✅ Yes |
+| `PORT` | Server port (auto-set by Heroku) | ❌ No |
+| `CLIENT_URL` | Client URL for CORS (leave empty) | ❌ No |
 
 ## Usage
 
-### Manager Access
+### For Route Managers
 
-1. Go to the home page
-2. Click "Login as Manager"
-3. Use password: `RideManager2024`
-4. Create a new session
-5. Share the PIN with participants
-6. Click on the map to create a route
-7. Monitor participants and send messages
+1. **Create Session**: Enter your name and get a PIN
+2. **Plan Route**: Click on the map to add waypoints
+3. **Share PIN**: Give participants the 6-digit PIN
+4. **Track Progress**: See live locations and send messages
 
-### Participant Access
+### For Participants
 
-1. Go to the home page
-2. Click "Join Session"
-3. Enter the 6-digit PIN from the manager
-4. Enter your name
-5. Allow location access when prompted
-6. Your location will be shared with the manager
+1. **Join Session**: Enter the PIN and your name
+2. **Share Location**: Allow location access for real-time tracking
+3. **Follow Route**: View the planned route and navigation
+4. **Receive Updates**: Get messages from the route manager
 
-## Important Notes
+## API Endpoints
 
-- **Google Maps API**: You need to enable the Maps JavaScript API and Places API in your Google Cloud Console
-- **HTTPS Required**: Location services require HTTPS in production
-- **Manager Password**: The default password is hardcoded for demo purposes. In production, use proper authentication
-- **Real-time Updates**: Currently uses local state. For production, implement WebSocket or similar for real-time sync
+- `GET /health` - Health check
+- `WebSocket /socket.io` - Real-time communication
 
-## PWA Installation
+## Development Scripts
 
-### Mobile (Android/iOS)
+```bash
+# Client & Server
+npm run dev:all          # Run both in development
+npm run build            # Build for production
+npm start               # Start production server
 
-1. Open the app in Chrome/Safari
-2. You'll see an "Install" prompt or use the browser menu
-3. Add to home screen
-4. The app will function like a native app
+# Client only
+npm run dev             # Vite dev server
+npm run build:client    # Build client
+npm run type-check      # TypeScript check
 
-### Desktop (Chrome/Edge)
+# Server only
+npm run server:dev      # Server dev with nodemon
+npm run server:build    # Build server
 
-1. Look for the install icon in the address bar
-2. Click to install
-3. The app will open in its own window
+# Docker
+npm run docker:dev      # Development with Docker
+npm run docker:up       # Production with Docker
 
-## Security Considerations
-
-- Implement proper authentication for managers
-- Use HTTPS for all communications
-- Validate session PINs on the backend
-- Implement rate limiting for PIN attempts
-- Consider privacy implications of location tracking
-
-## Future Enhancements
-
-- Backend API for data persistence
-- Real-time sync with WebSocket/Socket.io
-- Route history and analytics
-- Voice/video calling between manager and participants
-- Offline route caching
-- Multi-language support
-- Export routes to GPX/KML formats
-
-## Recommended IDE Setup
-
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
+# Deployment
+npm run heroku-postbuild # Heroku build hook
 ```
 
-### Compile and Hot-Reload for Development
+## Architecture
 
-```sh
-npm run dev
+```
+┌─────────────────┐    WebSocket    ┌─────────────────┐
+│   Vue.js Client │ ←──────────────→ │ Express Server  │
+│                 │                 │                 │
+│ • Vuetify UI    │                 │ • Socket.io     │
+│ • Google Maps   │                 │ • Session Mgmt  │
+│ • Pinia Store   │                 │ • TypeScript    │
+└─────────────────┘                 └─────────────────┘
 ```
 
-### Type-Check, Compile and Minify for Production
+## Contributing
 
-```sh
-npm run build
-```
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests (when available)
+5. Submit a pull request
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+Made with ❤️ for real-time location tracking

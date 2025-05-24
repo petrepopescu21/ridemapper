@@ -1,0 +1,55 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: ridemapper
+
+build:
+  artifacts:
+    - image: ridemapper-server
+      context: server
+      docker:
+        dockerfile: Dockerfile
+    - image: ridemapper-client
+      context: .
+      docker:
+        dockerfile: Dockerfile
+
+deploy:
+  helm:
+    releases:
+      - name: ridemapper
+        chartPath: helm/ridemapper
+        valuesFiles:
+          - helm/ridemapper/values.yaml
+
+profiles:
+  - name: dev
+    build:
+      artifacts:
+        - image: ridemapper-server
+          context: server
+          docker:
+            dockerfile: Dockerfile
+            target: builder
+        - image: ridemapper-client
+          context: .
+          docker:
+            dockerfile: Dockerfile
+            target: builder
+    deploy:
+      helm:
+        releases:
+          - name: ridemapper-dev
+            chartPath: helm/ridemapper
+            valuesFiles:
+              - helm/ridemapper/values-dev.yaml
+
+  - name: local
+    build:
+      local:
+        push: false
+    deploy:
+      docker:
+        images:
+          - ridemapper-server
+          - ridemapper-client 
