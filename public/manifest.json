@@ -1,0 +1,30 @@
+{
+    "name": "RideMapper - Route Management",
+    "short_name": "RideMapper",
+    "description": "Real-time route management and tracking app for managing participants on routes",
+    "theme_color": "#4DBA87",
+    "background_color": "#ffffff",
+    "display": "standalone",
+    "orientation": "portrait",
+    "scope": "/",
+    "start_url": "/",
+    "icons": [
+        {
+            "src": "/pwa-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/pwa-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "navigation",
+        "productivity",
+        "utilities"
+    ]
+}
