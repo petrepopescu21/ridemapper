@@ -11,6 +11,7 @@ interface Route {
   name: string
   description?: string
   points: RoutePoint[]
+  distance?: number // Distance in meters
   createdBy: string
   createdAt: number
   updatedAt: number
@@ -87,7 +88,8 @@ class RouteService {
     name: string,
     description: string,
     points: RoutePoint[],
-    createdBy: string
+    createdBy: string,
+    distance?: number
   ): Promise<{ success: boolean; route?: Route; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket?.connected) {
@@ -102,6 +104,7 @@ class RouteService {
           description,
           points,
           createdBy,
+          distance,
           isTemplate: true,
         },
         (response: { success: boolean; route?: Route; error?: string }) => {
@@ -116,7 +119,8 @@ class RouteService {
     name: string,
     description: string,
     points: RoutePoint[],
-    updatedBy: string
+    updatedBy: string,
+    distance?: number
   ): Promise<{ success: boolean; route?: Route; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket?.connected) {
@@ -132,6 +136,7 @@ class RouteService {
           description,
           points,
           updatedBy,
+          distance,
         },
         (response: { success: boolean; route?: Route; error?: string }) => {
           resolve(response)

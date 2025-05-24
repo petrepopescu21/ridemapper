@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { useAuthStore } from '@/stores/auth'
@@ -17,6 +17,7 @@ const showMapSelection = ref(false)
 const showMobileMenu = ref(false)
 const availableMaps = ref<Route[]>([])
 const selectedMapId = ref<string | null>(null)
+const isLoadingSession = ref(false)
 
 // Set manager flag when accessing dashboard
 sessionStore.isManager = true
@@ -28,6 +29,30 @@ const hasActiveSession = computed(() => {
 const isSessionRecovered = computed(() => {
   // Check if we have a session that was loaded from storage
   return hasActiveSession.value && !isCreating.value
+})
+
+// Auto-recover session when component mounts
+onMounted(async () => {
+  // Only try to recover if we don't already have an active session
+  if (!hasActiveSession.value && !isLoadingSession.value) {
+    isLoadingSession.value = true
+    
+    try {
+      const recoveryResult = await sessionStore.recoverSession()
+      
+      if (recoveryResult.success && sessionStore.currentSession) {
+        console.log('Active session automatically recovered in dashboard')
+        // Session was successfully recovered - the UI will automatically update
+        // due to the reactive hasActiveSession computed property
+      } else {
+        console.log('No active session to recover:', recoveryResult.error)
+      }
+    } catch (error) {
+      console.error('Failed to recover session in dashboard:', error)
+    } finally {
+      isLoadingSession.value = false
+    }
+  }
 })
 
 async function createNewSession() {
@@ -100,7 +125,6 @@ function goToMaps() {
 
 function logout() {
   authStore.logout()
-  sessionStore.endSession()
   router.push('/')
 }
 
@@ -332,55 +356,74 @@ function copyPin() {
         <v-row v-else justify="center">
           <v-col cols="12" md="8" lg="6">
             <v-card elevation="4" class="text-center pa-8">
-              <v-icon size="120" color="primary" class="mb-6">mdi-map-plus</v-icon>
+              <!-- Loading Session State -->
+              <div v-if="isLoadingSession">
+                <v-progress-circular
+                  size="80"
+                  width="6"
+                  color="primary"
+                  indeterminate
+                  class="mb-6"
+                />
+                
+                <h2 class="text-h4 font-weight-bold mb-4">Checking for Active Session</h2>
+                <p class="text-h6 text-medium-emphasis mb-8">
+                  Please wait while we check if you have an active session...
+                </p>
+              </div>
               
-              <h2 class="text-h4 font-weight-bold mb-4">No Active Session</h2>
-              <p class="text-h6 text-medium-emphasis mb-8">
-                Start or join a session to manage routes and track participants
-              </p>
-              
-              <!-- Error Message -->
-              <v-alert
-                v-if="createError"
-                type="error"
-                variant="tonal"
-                class="mb-4"
-                :text="createError"
-              />
-              
-              <!-- Connection Status -->
-              <v-alert
-                v-if="!sessionStore.isConnected && sessionStore.connectionError"
-                type="warning"
-                variant="tonal"
-                class="mb-4"
-                :text="sessionStore.connectionError"
-              />
-              
-              <v-btn
-                @click="createNewSession"
-                color="primary"
-                size="x-large"
-                prepend-icon="mdi-plus"
-                :loading="isCreating"
-                :disabled="isCreating"
-                class="text-none font-weight-bold px-8 mb-4"
-              >
-                {{ isCreating ? 'Connecting...' : 'Start Session' }}
-              </v-btn>
-              
-              <div class="text-body-2 text-medium-emphasis mb-4">or</div>
-              
-              <v-btn
-                @click="goToMaps"
-                color="secondary"
-                size="large"
-                prepend-icon="mdi-map-outline"
-                variant="outlined"
-                class="text-none font-weight-bold px-8"
-              >
-                Manage Maps
-              </v-btn>
+              <!-- No Session Found State -->
+              <div v-else>
+                <v-icon size="120" color="primary" class="mb-6">mdi-map-plus</v-icon>
+                
+                <h2 class="text-h4 font-weight-bold mb-4">No Active Session</h2>
+                <p class="text-h6 text-medium-emphasis mb-8">
+                  Start or join a session to manage routes and track participants
+                </p>
+                
+                <!-- Error Message -->
+                <v-alert
+                  v-if="createError"
+                  type="error"
+                  variant="tonal"
+                  class="mb-4"
+                  :text="createError"
+                />
+                
+                <!-- Connection Status -->
+                <v-alert
+                  v-if="!sessionStore.isConnected && sessionStore.connectionError"
+                  type="warning"
+                  variant="tonal"
+                  class="mb-4"
+                  :text="sessionStore.connectionError"
+                />
+                
+                <v-btn
+                  @click="createNewSession"
+                  color="primary"
+                  size="x-large"
+                  prepend-icon="mdi-plus"
+                  :loading="isCreating"
+                  :disabled="isCreating"
+                  class="text-none font-weight-bold px-8 mb-4"
+                >
+                  {{ isCreating ? 'Connecting...' : 'Start Session' }}
+                </v-btn>
+                
+                <div class="text-body-2 text-medium-emphasis mb-4">or</div>
+                
+                <v-btn
+                  @click="goToMaps"
+                  color="secondary"
+                  size="large"
+                  prepend-icon="mdi-map-outline"
+                  variant="outlined"
+                  class="text-none font-weight-bold px-8"
+                >
+                  Manage Maps
+                </v-btn>
+              </div>
             </v-card>
           </v-col>
         </v-row>

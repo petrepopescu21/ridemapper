@@ -16,6 +16,7 @@ export interface Route {
   name: string
   description?: string
   points: RoutePoint[]
+  distance?: number // Distance in meters
   createdBy: string
   createdAt: number
   updatedAt: number
@@ -146,6 +147,7 @@ export interface ClientToServerEvents {
       description?: string
       points: RoutePoint[]
       createdBy: string
+      distance?: number
       isTemplate?: boolean
     },
     callback: (response: { success: boolean; route?: Route; error?: string }) => void
@@ -156,6 +158,7 @@ export interface ClientToServerEvents {
       name?: string
       description?: string
       points?: RoutePoint[]
+      distance?: number
       updatedBy: string
     },
     callback: (response: { success: boolean; route?: Route; error?: string }) => void

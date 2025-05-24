@@ -1,14 +1,30 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
+const authStore = useAuthStore()
 const isRecovering = ref(false)
 
+// Clean up session when user closes browser/tab
+function handleBeforeUnload() {
+  if (sessionStore.currentSession && sessionStore.currentParticipantId) {
+    // Only participants leave the session when closing browser
+    // Managers keep their sessions active for recovery
+    if (!sessionStore.isManager) {
+      sessionStore.leaveSession()
+    }
+  }
+}
+
 onMounted(async () => {
-  // Try to recover session on app load
+  // First, check if manager is already authenticated (restore from sessionStorage)
+  authStore.checkAuth()
+  
+  // Try to recover session on app load (silently, without redirecting)
   isRecovering.value = true
   
   try {
@@ -16,10 +32,7 @@ onMounted(async () => {
     
     if (result.success) {
       console.log('Session recovered successfully')
-      // Redirect to map if session was recovered
-      if (sessionStore.currentSession) {
-        await router.push('/map')
-      }
+      // Session recovered silently - no automatic navigation
     } else {
       console.log('No session to recover:', result.error)
     }
@@ -28,6 +41,14 @@ onMounted(async () => {
   } finally {
     isRecovering.value = false
   }
+
+  // Add beforeunload event listener
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 

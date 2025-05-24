@@ -547,7 +547,8 @@ function leaveSession() {
     // Navigate to manager dashboard without ending session
     router.push('/manager-dashboard')
   } else {
-    // Participants leave the session
+    // Participants properly leave the session (clears localStorage)
+    sessionStore.leaveSession()
     router.push('/')
   }
 }

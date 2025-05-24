@@ -15,6 +15,7 @@ model Route {
   name        String
   description String?
   points      Json     // Array of RoutePoint objects
+  distance    Float?   // Distance in meters (nullable for existing routes)
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

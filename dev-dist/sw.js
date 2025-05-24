@@ -79,24 +79,36 @@ define(['./workbox-f001acab'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "registerSW.js",
-    "revision": "b2999fa3193e9ce6a83fa7d0681b1d1b"
+    "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.cop1fqbvdgg"
+    "revision": "0.ptr2ncvsouo"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
     allowlist: [/^\/$/]
   }));
-  workbox.registerRoute(/^https:\/\/maps\.googleapis\.com\//, new workbox.CacheFirst({
-    "cacheName": "google-maps-cache",
+  workbox.registerRoute(/^https:\/\/maps\.googleapis\.com\/maps\/api\/js/, new workbox.CacheFirst({
+    "cacheName": "google-maps-api-cache",
     plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 10,
-      maxAgeSeconds: 31536000
+      maxEntries: 5,
+      maxAgeSeconds: 2592000
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/.*\.googleapis\.com\/.*\.(png|jpg|jpeg|svg|woff|woff2)$/, new workbox.CacheFirst({
+    "cacheName": "google-static-assets",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 2592000
     })]
   }), 'GET');
   workbox.registerRoute(/^https:\/\/.*\.herokuapp\.com\/health/, new workbox.NetworkFirst({
     "cacheName": "health-check-cache",
+    plugins: []
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/.*\.herokuapp\.com\/api\//, new workbox.NetworkFirst({
+    "cacheName": "api-cache",
+    "networkTimeoutSeconds": 10,
     plugins: []
   }), 'GET');
 

@@ -35,6 +35,7 @@ const routeMarkers = ref<any[]>([])
 const routePolyline = ref<any>()
 const isDragging = ref(false)
 const clickTimeout = ref<any>(null)
+const totalDistance = ref<number>(0) // Distance in meters from Routes API
 
 // Pins management state
 const showPinsPanel = ref(false)
@@ -79,6 +80,16 @@ const pinsWithAddresses = computed(() => {
 // Check if current manager owns the selected map
 const isOwnMap = computed(() => {
   return !selectedMap.value || selectedMap.value.createdBy === authStore.managerId
+})
+
+// Format distance for display
+const formattedDistance = computed(() => {
+  if (totalDistance.value === 0) return null
+  
+  const meters = totalDistance.value
+  const kilometers = (meters / 1000).toFixed(2)
+  
+  return `${kilometers} km`
 })
 
 // Initialize Google Maps
@@ -293,6 +304,7 @@ function updateRouteAfterChange() {
     if (routePolyline.value) {
       routePolyline.value.setMap(null)
     }
+    totalDistance.value = 0
     return
   }
 
@@ -302,6 +314,9 @@ function updateRouteAfterChange() {
         // Success with Routes API - decode the polyline
         const route = data.routes[0]
         const encodedPolyline = route.polyline.encodedPolyline
+        
+        // Update total distance from Routes API
+        totalDistance.value = route.distanceMeters || 0
         
         // Decode the polyline using Google Maps utility
         const decodedPath = window.google.maps.geometry.encoding.decodePath(encodedPolyline)
@@ -328,7 +343,7 @@ function updateRouteAfterChange() {
     })
     .catch(error => {
       console.warn('Routes API failed after pin change, using fallback:', error)
-      // Fallback - draw simple polyline
+      // Fallback - draw simple polyline and reset distance
       if (routePolyline.value) {
         routePolyline.value.setMap(null)
       }
@@ -341,6 +356,9 @@ function updateRouteAfterChange() {
         strokeWeight: 4,
         map: map.value
       })
+      
+      // Reset distance since we can't get accurate distance without Routes API
+      totalDistance.value = 0
     })
     
   // Update form points
@@ -486,7 +504,8 @@ async function confirmSave() {
         mapForm.value.name.trim(),
         mapForm.value.description.trim(),
         mapForm.value.points,
-        authStore.managerId!
+        authStore.managerId!,
+        totalDistance.value
       )
       
       if (!result.success) {
@@ -505,7 +524,8 @@ async function confirmSave() {
         mapForm.value.name.trim(),
         mapForm.value.description.trim(),
         mapForm.value.points,
-        authStore.managerId!
+        authStore.managerId!,
+        totalDistance.value
       )
       
       if (!result.success) {
@@ -854,6 +874,9 @@ onUnmounted(() => {
                     <v-list-item-title>{{ mapData.name }}</v-list-item-title>
                     <v-list-item-subtitle>
                       {{ mapData.points.length }} points
+                      <span v-if="mapData.distance" class="text-success">
+                        • {{ (mapData.distance / 1000).toFixed(2) }} km
+                      </span>
                       {{ mapData.description ? `• ${mapData.description}` : '' }}
                       <br>
                       <span class="text-caption">Created by: {{ mapData.createdBy }}</span>
@@ -982,6 +1005,18 @@ onUnmounted(() => {
                 
                 <div class="pa-4">
                   <v-alert
+                    v-if="formattedDistance"
+                    type="success"
+                    density="compact"
+                    class="mb-3"
+                    icon="mdi-map-marker-distance"
+                    variant="tonal"
+                  >
+                    <strong>Total Distance:</strong><br>
+                    {{ formattedDistance }}
+                  </v-alert>
+                  
+                  <v-alert
                     type="info"
                     density="compact"
                     class="mb-3"
@@ -1107,6 +1142,15 @@ onUnmounted(() => {
                 <div class="mt-3">
                   <v-chip size="small" color="primary">
                     {{ waypoints.length }} waypoints
+                  </v-chip>
+                  <v-chip 
+                    v-if="formattedDistance" 
+                    size="small" 
+                    color="success" 
+                    class="ml-2"
+                  >
+                    <v-icon start>mdi-map-marker-distance</v-icon>
+                    {{ formattedDistance }}
                   </v-chip>
                 </div>
               </v-card>

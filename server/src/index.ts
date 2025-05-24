@@ -394,8 +394,8 @@ io.on('connection', (socket) => {
       )
 
       if (result.success && result.sessionId) {
-        // Broadcast location update to all participants in the session
-        socket.to(result.sessionId).emit('location:updated', {
+        // Broadcast location update to all participants in the session (including sender)
+        io.to(result.sessionId).emit('location:updated', {
           sessionId: result.sessionId,
           participantId: data.participantId,
           location: data.location,
@@ -430,7 +430,8 @@ io.on('connection', (socket) => {
         data.points,
         data.createdBy,
         data.description,
-        data.isTemplate
+        data.isTemplate,
+        data.distance
       )
 
       callback({ success: true, route })
@@ -458,6 +459,7 @@ io.on('connection', (socket) => {
         name: data.name,
         description: data.description,
         points: data.points,
+        distance: data.distance,
       })
 
       if (route) {

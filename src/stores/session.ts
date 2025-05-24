@@ -26,6 +26,7 @@ export interface Route {
   name: string
   description?: string
   points: RoutePoint[]
+  distance?: number // Distance in meters
   createdBy: string
   createdAt: number
   updatedAt: number
@@ -162,10 +163,31 @@ export const useSessionStore = defineStore('session', () => {
 
       // If recovery failed, clear storage
       clearSessionFromStorage()
+
+      // Redirect based on what role they had when session ended
+      if (storedSession.isManager) {
+        // Former managers go to dashboard
+        window.location.href = '/manager-dashboard'
+      } else {
+        // Former participants go to homepage
+        window.location.href = '/'
+      }
+
       return { success: false, error: 'Session no longer exists on server' }
     } catch (error) {
       console.error('Session recovery failed:', error)
+
+      // Store the role before clearing storage
+      const wasManager = storedSession.isManager
       clearSessionFromStorage()
+
+      // Redirect based on what role they had
+      if (wasManager) {
+        window.location.href = '/manager-dashboard'
+      } else {
+        window.location.href = '/'
+      }
+
       return { success: false, error: 'Failed to recover session' }
     }
   }
@@ -210,9 +232,21 @@ export const useSessionStore = defineStore('session', () => {
     socket.on('session:ended', (data) => {
       console.log('Session ended:', data)
       if (currentSession.value && data.sessionId === currentSession.value.id) {
+        const wasManager = isManager.value
+
         currentSession.value = null
         currentParticipantId.value = null
         isManager.value = false
+        clearSessionFromStorage()
+
+        // Redirect based on role
+        if (wasManager) {
+          // Redirect managers to dashboard
+          window.location.href = '/manager-dashboard'
+        } else {
+          // Redirect participants to homepage
+          window.location.href = '/'
+        }
       }
     })
 

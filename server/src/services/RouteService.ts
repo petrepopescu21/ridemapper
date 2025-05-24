@@ -14,7 +14,8 @@ export class RouteService {
     points: RoutePoint[],
     createdBy: string,
     description?: string,
-    isTemplate: boolean = true
+    isTemplate: boolean = true,
+    distance?: number
   ): Promise<Route> {
     const routeData = await this.prisma.route.create({
       data: {
@@ -23,6 +24,7 @@ export class RouteService {
         points: points as any, // Prisma Json type
         createdBy,
         isTemplate,
+        distance,
       },
     })
 
@@ -36,6 +38,7 @@ export class RouteService {
       name?: string
       description?: string
       points?: RoutePoint[]
+      distance?: number
     }
   ): Promise<Route | null> {
     try {
@@ -57,6 +60,7 @@ export class RouteService {
           ...(updates.name && { name: updates.name }),
           ...(updates.description !== undefined && { description: updates.description }),
           ...(updates.points && { points: updates.points as any }),
+          ...(updates.distance !== undefined && { distance: updates.distance }),
         },
       })
 
@@ -171,6 +175,7 @@ export class RouteService {
       name: prismaRoute.name,
       description: prismaRoute.description,
       points: prismaRoute.points as RoutePoint[],
+      distance: prismaRoute.distance,
       createdBy: prismaRoute.createdBy,
       createdAt: prismaRoute.createdAt.getTime(),
       updatedAt: prismaRoute.updatedAt.getTime(),
